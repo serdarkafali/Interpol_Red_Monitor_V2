@@ -1,7 +1,7 @@
 [project]
 name = "interpol-contracts"
 version = "0.1.0"
-description = "Add your description here"
+description = "Servisler arasında paylaşılan Kafka event şemaları"
 readme = "README.md"
 authors = [
     { name = "Serdar", email = "serdarkfl8@gmail.com" }

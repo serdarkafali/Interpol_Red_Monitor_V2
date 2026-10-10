@@ -1,7 +1,7 @@
 [project]
 name = "interpol-collector"
 version = "0.1.0"
-description = "Add your description here"
+description = "Interpol API'sinden red notice kayıtlarını toplayıp Kafka'ya yayınlayan servis
 readme = "README.md"
 authors = [
     { name = "Serdar", email = "serdarkfl8@gmail.com" }
