@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Sanal ortam (uv sync ile yeniden üretilir)
+.venv/
+
+# Gizli bilgiler (şifreler, anahtarlar)
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# Test / araç önbellekleri
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
