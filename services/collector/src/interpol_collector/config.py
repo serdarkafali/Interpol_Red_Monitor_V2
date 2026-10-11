@@ -1,9 +1,11 @@
 """Configuration for the collector service, loaded from environment variables."""
 
-from typing import Literal, Self
+from typing import Self
 
 from pydantic import Field, HttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from interpol_observability import LogFormat, LogLevel
 
 
 class CollectorSettings(BaseSettings):
@@ -21,7 +23,8 @@ class CollectorSettings(BaseSettings):
     page_size: int = Field(default=20, ge=1, le=160)
     request_delay_min_seconds: float = Field(default=5.0, ge=0)
     request_delay_max_seconds: float = Field(default=8.0, ge=0)
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    log_level: LogLevel = "INFO"
+    log_format: LogFormat = "json"
 
     @model_validator(mode="after")
     def _validate_delay_range(self) -> Self:
