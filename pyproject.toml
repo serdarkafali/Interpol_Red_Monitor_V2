@@ -10,6 +10,7 @@ members = ["libs/*", "services/*"]
 
 [dependency-groups]
 dev = [
+    "curl-cffi>=0.16.3",
     "mypy>=2.4.0",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",

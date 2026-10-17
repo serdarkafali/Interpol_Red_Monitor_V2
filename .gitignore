@@ -20,3 +20,6 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# Interpol API'den toplanan gerçek örnek veriler (kişisel veri, repoya girmez)
+samples/
