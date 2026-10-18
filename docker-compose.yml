@@ -1,0 +1,25 @@
+# Local development infrastructure. Credentials are read from the git-ignored .env file.
+name: interpol-monitor
+
+services:
+  postgres:
+    # PostgreSQL 18 with the pgvector extension (needed later for face embeddings).
+    # Both versions are pinned so that the database never upgrades unexpectedly.
+    image: pgvector/pgvector:0.8.2-pg18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ images keep their data under /var/lib/postgresql.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
