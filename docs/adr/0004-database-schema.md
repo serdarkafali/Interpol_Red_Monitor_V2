@@ -82,7 +82,7 @@ yüz analizi tam boyutlu fotoğraflarla yapılacak.
   `notices` üzerinde `NOT NULL UNIQUE`; upsert (`INSERT ... ON CONFLICT (entity_id) DO
   UPDATE`) bu kısıta dayanıyor.
 - `NOT NULL` yalnızca sistemin onsuz çalışamayacağı alanlara konacak: kimlikler, FK'lar,
-  `name`, tutuklama emrindeki `charge` ve `issuing_country_id`. Dış kaynaktan gelen
+  `name`, tutuklama emrindeki `charge` ve `issuing_country_code`. Dış kaynaktan gelen
   tanımlayıcı alanlar, örneklemde dolu görünseler bile nullable olacak; kaynağı kontrol
   etmediğimiz için bir alanın bir gün boş gelmesi tüm ingest'i durdurmamalı.
 - `date_of_birth` `date` tipinde. Ayrıştırılamayan bir değer `null` olarak yazılıp

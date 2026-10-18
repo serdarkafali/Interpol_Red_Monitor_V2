@@ -30,3 +30,13 @@ uv run alembic downgrade -1                          # son migration'ı geri al
 
 Otomatik üretilen migration'lar her zaman elle okunup kontrol edilmelidir; Alembic
 trigger, CHECK kısıtı ve veri taşıma gibi değişiklikleri her zaman doğru algılamaz.
+
+
+## Testler
+
+Testler Docker'da geçici bir PostgreSQL container'ı açar, migration'ları ona uygular ve
+iş bitince container'ı siler; geliştirme veritabanına dokunmaz. Docker çalışıyor olmalı.
+
+```powershell
+uv run pytest libs/db      # repo kökünden
+```
