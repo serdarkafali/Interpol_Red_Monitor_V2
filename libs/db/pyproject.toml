@@ -1,0 +1,19 @@
+[project]
+name = "interpol-db"
+version = "0.1.0"
+description = "database modelimizin olduğu yer"
+readme = "README.md"
+authors = [
+    { name = "Serdar", email = "serdarkfl8@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy>=2.1.5",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
