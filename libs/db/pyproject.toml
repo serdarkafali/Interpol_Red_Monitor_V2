@@ -1,7 +1,7 @@
 [project]
 name = "interpol-db"
 version = "0.1.0"
-description = "database modelimizin olduğu yer"
+description = "Database schema of the Interpol monitor: SQLAlchemy models and Alembic migrations."
 readme = "README.md"
 authors = [
     { name = "Serdar", email = "serdarkfl8@gmail.com" }

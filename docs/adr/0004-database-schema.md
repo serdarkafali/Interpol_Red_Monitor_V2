@@ -121,6 +121,8 @@ yüz analizi tam boyutlu fotoğraflarla yapılacak.
 - PostgreSQL FK kolonlarını otomatik index'lemediği için her FK kolonuna elle index
   eklenecek. Sorguların çoğu `deleted_at IS NULL` koşulunu içereceği için bu koşulla
   partial index'ler kullanılacak.
+- `countries` tablosunun anahtarı doğal bir kod (`code`) olduğu için, ona bağlanan FK'lar
+  `_id` yerine `_code` ile biter (`country_of_birth_code`, `issuing_country_code`).
 
 ## Değerlendirilen alternatifler
 
