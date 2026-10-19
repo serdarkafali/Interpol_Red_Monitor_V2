@@ -54,7 +54,7 @@ işi olacak: Docker container'ların stdout'unu yakalayacak, bir log toplayıcı
 Logstash'e iletecek. Bu hattın ayrıntıları ELK fazında ayrı bir ADR ile belirlenecek.
 
 Loglara kişisel veri yazılmayacak. Bir kayda referans gerektiğinde yalnızca kimlikler
-(`interpol_id` gibi) kullanılacak; isim, doğum tarihi, uyruk veya fotoğraf bilgisi
+(`entity_id` gibi) kullanılacak; isim, doğum tarihi, uyruk veya fotoğraf bilgisi
 loglanmayacak.
 
 ## Değerlendirilen alternatifler

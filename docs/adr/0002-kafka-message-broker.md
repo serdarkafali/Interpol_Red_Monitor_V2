@@ -39,10 +39,10 @@ Teslim garantisi olarak **at-least-once** kullanacağız: hiçbir mesaj kaybolma
 bir mesaj nadiren birden fazla kez teslim edilebilecek. Consumer'lar offset'lerini ancak
 mesajı başarıyla işledikten sonra kaydedecek. Bu yüzden tüm consumer'lar **idempotent**
 yazılmak zorunda: aynı mesajı iki kez işlemek, bir kez işlemekle aynı sonucu vermeli.
-Veritabanına yazan consumer'lar bunu kaydın `interpol_id` alanı üzerinden upsert yaparak
+Veritabanına yazan consumer'lar bunu kaydın `entity_id` alanı üzerinden upsert yaparak
 sağlayacak.
 
-Bir Red Notice kaydıyla ilgili mesajlarda key olarak `interpol_id` kullanılacak. Kafka aynı
+Bir Red Notice kaydıyla ilgili mesajlarda key olarak `entity_id` kullanılacak. Kafka aynı
 key'e sahip mesajları aynı partition'a yazdığı ve bir partition içindeki sırayı koruduğu
 için, aynı kişiye ait olaylar geldikleri sırayla işlenecek.
 
@@ -94,7 +94,7 @@ seçtik.
 sonrasında bir consumer group'un offset'i geri alınarak olaylar Interpol API'sine yeniden
 istek atılmadan baştan işlenebilecek. Yeni bir servis eklendiğinde mevcut servislere
 dokunmadan kendi consumer group'uyla aynı olayları okuyabilecek. `collector` ile diğer
-servisler birbirinin ayakta olmasından bağımsız çalışacak ve key olarak `interpol_id`
+servisler birbirinin ayakta olmasından bağımsız çalışacak ve key olarak `entity_id`
 kullanıldığı için aynı kişiye ait olayların sırası korunacak.
 
 Buna karşılık bazı bedelleri kabul ediyoruz. Kafka'yı çalıştırmak RabbitMQ'ya göre daha
@@ -102,7 +102,7 @@ karmaşık ve daha fazla bellek istiyor; geliştirme ortamında bile ayrı bir c
 yönetilmesi gerekecek. At-least-once garantisi nedeniyle her consumer idempotent yazılmak
 zorunda. Bu bir kodlama disiplini ve testlerde aynı mesajın iki kez işlenmesi senaryosu
 özellikle doğrulanmalı. Bu karar veritabanı tasarımını da doğrudan etkiliyor: Red Notice
-kayıtları `interpol_id` üzerinde tekil (unique) bir kısıta sahip olmalı. Kafka'da mesaj
+kayıtları `entity_id` üzerinde tekil (unique) bir kısıta sahip olmalı. Kafka'da mesaj
 önceliği ve gecikmeli mesaj gibi özellikler yok; ileride ihtiyaç olursa uygulama tarafında
 çözülmesi gerekecek. Retention süresi dolan mesajlar silindiği için Kafka kalıcı bir veri
 kaynağı değil; sistemin asıl kaynağı PostgreSQL olmaya devam edecek. Son olarak Kafka'ya
