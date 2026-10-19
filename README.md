@@ -25,7 +25,7 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0002](docs/adr/0002-kafka-message-broker.md) | Servisler arası mesajlaşma için Kafka |
 | [0003](docs/adr/0003-structured-logging.md) | structlog ile yapılandırılmış loglama |
 | [0004](docs/adr/0004-database-schema.md) | PostgreSQL şeması ve ortak `libs/db` paketi |
-
+| [0005](docs/adr/0005-kafka-topics-and-message-contract.md) | Kafka topic'leri ve mesaj sözleşmesi |
 ## Repo yapısı
 
 ```text
