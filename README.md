@@ -58,7 +58,7 @@ uv sync --all-packages             # sanal ortam ve tüm bağımlılıklar
 uv run pre-commit install          # commit öncesi kontroller
 
 Copy-Item .env.example .env        # sonra .env içindeki şifreleri değiştirin
-docker compose up -d               # PostgreSQL 18 + pgvector
+docker compose up -d               # PostgreSQL 18 + pgvector, Kafka
 cd libs/db; uv run alembic upgrade head; cd ../..
 ```
 

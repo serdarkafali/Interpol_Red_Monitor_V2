@@ -21,5 +21,66 @@ services:
       timeout: 5s
       retries: 10
 
+  kafka:
+    # Apache Kafka in KRaft mode (no ZooKeeper): one node is both broker and controller.
+    image: apache/kafka:4.3.1
+    hostname: kafka
+    ports:
+      - "${KAFKA_PORT:-9092}:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # HOST serves clients on this computer (localhost), DOCKER serves other containers.
+      KAFKA_LISTENERS: CONTROLLER://:29093,HOST://:9092,DOCKER://:19092
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:${KAFKA_PORT:-9092},DOCKER://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,HOST:PLAINTEXT,DOCKER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      # Fixed, so that the data volume keeps matching the cluster across restarts.
+      CLUSTER_ID: EvKh8mt0TP-s1dXxqWLwvQ
+      # A single broker can hold only one copy of Kafka's internal topics.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are created only by kafka-init (ADR 0005); a typo must not create a topic.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:19092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  kafka-init:
+    # Runs once after Kafka is healthy and creates the topics defined in ADR 0005.
+    # --if-not-exists makes it safe to run again on every "docker compose up".
+    image: apache/kafka:4.3.1
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        topics=/opt/kafka/bin/kafka-topics.sh
+        $$topics --bootstrap-server kafka:19092 --create --if-not-exists \
+          --topic interpol.notices.v1 --partitions 3 --replication-factor 1 \
+          --config retention.ms=604800000 --config cleanup.policy=delete
+        for dlq in ingestor.dlq face-worker.dlq; do
+          $$topics --bootstrap-server kafka:19092 --create --if-not-exists \
+            --topic "$$dlq" --partitions 1 --replication-factor 1 \
+            --config retention.ms=604800000
+        done
+        $$topics --bootstrap-server kafka:19092 --describe
+
 volumes:
   postgres-data:
+  kafka-data:
