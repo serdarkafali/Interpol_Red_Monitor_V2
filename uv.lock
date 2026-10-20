@@ -458,6 +458,12 @@ requires-dist = [
 name = "interpol-contracts"
 version = "0.1.0"
 source = { editable = "libs/contracts" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.14" }]
 
 [[package]]
 name = "interpol-db"
