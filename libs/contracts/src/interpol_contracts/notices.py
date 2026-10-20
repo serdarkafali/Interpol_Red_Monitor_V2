@@ -84,15 +84,26 @@ class NoticeObserved(_NoticeEvent):
     payload: NoticeSnapshot
 
 
+class NoticeSeen(_NoticeEvent):
+    """The collector saw the notice during a list scan, without fetching its detail.
+
+    Consumers use it only to refresh ``last_seen_at`` (ADR 0006).
+    """
+
+    event_type: Literal["notice.seen"] = "notice.seen"
+
+
 class NoticeRemoved(_NoticeEvent):
-    """The notice disappeared between two complete scans."""
+    """The notice was missing from two consecutive complete list scans (ADR 0006)."""
 
     event_type: Literal["notice.removed"] = "notice.removed"
 
 
-NoticeEvent = Annotated[NoticeObserved | NoticeRemoved, Field(discriminator="event_type")]
+NoticeEvent = Annotated[
+    NoticeObserved | NoticeSeen | NoticeRemoved, Field(discriminator="event_type")
+]
 
-_NOTICE_EVENT_ADAPTER: TypeAdapter[NoticeObserved | NoticeRemoved] = TypeAdapter(NoticeEvent)
+_NOTICE_EVENT_ADAPTER: TypeAdapter[NoticeEvent] = TypeAdapter(NoticeEvent)
 
 
 def compute_content_hash(detail: dict[str, Any], picture_ids: list[str]) -> str:
@@ -110,12 +121,12 @@ def compute_content_hash(detail: dict[str, Any], picture_ids: list[str]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def serialize_event(event: NoticeObserved | NoticeRemoved) -> bytes:
+def serialize_event(event: NoticeEvent) -> bytes:
     """Encode an event as the UTF-8 JSON bytes written to Kafka."""
     return event.model_dump_json().encode("utf-8")
 
 
-def parse_event(data: bytes) -> NoticeObserved | NoticeRemoved:
+def parse_event(data: bytes) -> NoticeEvent:
     """Decode the bytes of a Kafka message into the matching event type.
 
     Raises ``pydantic.ValidationError`` if the bytes are not a valid notice event.
@@ -123,6 +134,6 @@ def parse_event(data: bytes) -> NoticeObserved | NoticeRemoved:
     return _NOTICE_EVENT_ADAPTER.validate_json(data)
 
 
-def event_key(event: NoticeObserved | NoticeRemoved) -> bytes:
+def event_key(event: NoticeEvent) -> bytes:
     """Return the Kafka message key: the entity id, so a notice keeps its partition."""
     return event.entity_id.encode("utf-8")
