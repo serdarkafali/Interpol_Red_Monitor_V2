@@ -1,13 +1,15 @@
 [project]
 name = "interpol-contracts"
 version = "0.1.0"
-description = "Servisler arasında paylaşılan Kafka event şemaları"
+description = "Message contracts shared by the services that talk over Kafka."
 readme = "README.md"
 authors = [
     { name = "Serdar", email = "serdarkfl8@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.14",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]

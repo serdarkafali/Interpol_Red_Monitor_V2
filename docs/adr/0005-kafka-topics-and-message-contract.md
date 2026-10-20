@@ -55,6 +55,11 @@ tanımlanacak; producer ve consumer aynı modeli kullanacak. Her mesaj aynı zar
 
 `content_hash`, gelen verinin SHA-256 özeti olarak `collector` tarafından hesaplanacak;
 `ingestor` veritabanındaki özetle aynıysa yazmayı atlayacak (ADR 0004).
+`payload`, Interpol'ün cevabını geldiği gibi taşır; değerler `collector`'da temizlenmez,
+dönüştürülmez veya yeniden adlandırılmaz (örneğin `height` için gelen `0` değeri `0` olarak
+kalır, doğum tarihi metin olarak kalır). Bu dönüşümler consumer'ların işidir. Böylece
+dönüşüm kodundaki bir hata düzeltildiğinde olaylar Interpol'e yeniden gidilmeden işlenebilir.
+Interpol'ün eklediği ve modelde tanımlı olmayan alanlar da atılmadan taşınır.
 
 Şema değişikliklerinde yeni alan yalnızca varsayılan değerle eklenebilir; alan silmek veya
 anlamını değiştirmek yeni bir `schema_version` ve gerekirse yeni bir topic gerektirir.
