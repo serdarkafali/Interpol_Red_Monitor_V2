@@ -1,6 +1,6 @@
 # ADR 0005: Kafka topic'leri ve mesaj sözleşmesi
 
-- **Durum:** Kabul edildi
+- **Durum:** Kabul edildi; tarama ile ilgili üç maddesi ADR 0006 ile değişti
 - **Tarih:** 2026-10-19
 - **Karar verenler:** Serdar Kafalı
 
