@@ -97,7 +97,8 @@ _NOTICE_EVENT_ADAPTER: TypeAdapter[NoticeObserved | NoticeRemoved] = TypeAdapter
 
 def compute_content_hash(detail: dict[str, Any], picture_ids: list[str]) -> str:
     """Return the SHA-256 of a notice's raw detail and photo list.
-     The JSON is canonical (sorted keys, no whitespace) and the photo ids are sorted, so
+
+    The JSON is canonical (sorted keys, no whitespace) and the photo ids are sorted, so
     the same content always produces the same hash whatever the order Interpol used.
     """
     canonical = json.dumps(

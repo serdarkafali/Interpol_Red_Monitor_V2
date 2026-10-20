@@ -102,7 +102,7 @@ def test_timestamp_without_time_zone_is_rejected() -> None:
         make_observed(occurred_at=datetime(2026, 10, 20, 9, 30))
 
 
-@pytest.mark.parametrize("entity_id", ["2026-12345", "12345", "2026/", ""])
+@pytest.mark.parametrize("entity_id", ["2026-12345", "12345", "2026/", "", "x2026/1", "2026/1x"])
 def test_malformed_entity_id_is_rejected(entity_id: str) -> None:
     with pytest.raises(ValidationError):
         make_observed(entity_id=entity_id)
@@ -125,3 +125,10 @@ def test_content_hash_changes_when_the_content_changes() -> None:
 
 def test_event_key_is_the_entity_id() -> None:
     assert event_key(make_observed()) == b"2026/12345"
+
+
+def test_events_cannot_be_modified() -> None:
+    event = make_observed()
+
+    with pytest.raises(ValidationError):
+        event.entity_id = "2026/99999"
