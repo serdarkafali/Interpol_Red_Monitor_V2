@@ -12,6 +12,7 @@ from interpol_contracts import (
     NoticeDetail,
     NoticeObserved,
     NoticeRemoved,
+    NoticeSeen,
     NoticeSnapshot,
     compute_content_hash,
     event_key,
@@ -67,6 +68,18 @@ def test_removed_event_survives_a_round_trip() -> None:
 
     assert isinstance(parsed, NoticeRemoved)
     assert parsed == event
+
+
+def test_seen_event_survives_a_round_trip() -> None:
+    event = NoticeSeen(
+        occurred_at=datetime(2026, 10, 21, tzinfo=UTC), scan_id=uuid4(), entity_id="2026/7"
+    )
+
+    parsed = parse_event(serialize_event(event))
+
+    assert isinstance(parsed, NoticeSeen)
+    assert parsed == event
+    assert event_key(parsed) == b"2026/7"
 
 
 def test_raw_values_and_unknown_interpol_fields_are_kept() -> None:
