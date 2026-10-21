@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -442,6 +442,7 @@ name = "interpol-collector"
 version = "0.1.0"
 source = { editable = "services/collector" }
 dependencies = [
+    { name = "curl-cffi" },
     { name = "interpol-contracts" },
     { name = "interpol-observability" },
     { name = "pydantic-settings" },
@@ -449,6 +450,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "curl-cffi", specifier = ">=0.16.3" },
     { name = "interpol-contracts", editable = "libs/contracts" },
     { name = "interpol-observability", editable = "libs/observability" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
