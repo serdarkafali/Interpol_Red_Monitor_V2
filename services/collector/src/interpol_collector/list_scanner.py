@@ -5,7 +5,7 @@ then by nationality, then by halving the age range, until every group fits in on
 request. The scanner only reads the list; it does not fetch details or produce events.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -58,9 +58,16 @@ def iso_country_codes() -> tuple[str, ...]:
 class ListScanner:
     """Runs one complete list scan against a NoticeLister."""
 
-    def __init__(self, lister: NoticeLister, countries: Sequence[str]) -> None:
+    def __init__(
+        self,
+        lister: NoticeLister,
+        countries: Sequence[str],
+        *,
+        should_stop: Callable[[], bool] = lambda: False,
+    ) -> None:
         self._lister = lister
         self._countries = tuple(countries)
+        self._should_stop = should_stop
 
     def scan(self) -> ListScanResult:
         """Collect every visible notice id and decide whether the scan is complete."""
@@ -133,6 +140,10 @@ class ListScanner:
         return halves, True
 
     def _fetch(self, filters: Filters, progress: _Progress) -> ListPage | None:
+        if self._should_stop():
+            # Shutting down: send no more requests and let the scan end as incomplete.
+            progress.complete = False
+            return None
         progress.requests += 1
         if "ageMin" in filters:
             progress.age_split_requests += 1
