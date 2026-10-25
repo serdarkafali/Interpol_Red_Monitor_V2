@@ -218,3 +218,16 @@ def test_iso_country_codes_are_two_letter_codes() -> None:
     assert "TR" in codes
     assert len(codes) > 240
     assert all(len(code) == 2 and code.isupper() for code in codes)
+
+
+def test_scan_stops_sending_requests_when_asked_to_stop() -> None:
+    notices = make_notices(150, sex="M") + make_notices(100, sex="F", first_id=151)
+    lister = FakeLister(notices)
+    stop_after = 2
+
+    result = ListScanner(
+        lister, COUNTRIES, should_stop=lambda: len(lister.requests) >= stop_after
+    ).scan()
+
+    assert len(lister.requests) == stop_after
+    assert not result.complete
