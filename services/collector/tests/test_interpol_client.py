@@ -138,7 +138,13 @@ def test_list_request_accepts_every_allowed_filter() -> None:
     transport = FakeTransport(ok(LIST_BODY))
 
     make_client(transport, []).list_notices(
-        {"sexId": "M", "nationality": "RU", "ageMin": 40, "ageMax": 40}
+        {
+            "sexId": "M",
+            "arrestWarrantCountryId": "RU",
+            "nationality": "RU",
+            "ageMin": 40,
+            "ageMax": 40,
+        }
     )
 
     assert len(transport.requests) == 1

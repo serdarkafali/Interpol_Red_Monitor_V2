@@ -27,6 +27,7 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0004](docs/adr/0004-database-schema.md) | PostgreSQL şeması ve ortak `libs/db` paketi |
 | [0005](docs/adr/0005-kafka-topics-and-message-contract.md) | Kafka topic'leri ve mesaj sözleşmesi |
 | [0006](docs/adr/0006-collector-scan-strategy.md) | Collector tarama stratejisi |
+| [0007](docs/adr/0007-split-by-issuing-country.md) | Sorguları yakalama kararını çıkaran ülkeye göre bölmek |
 ## Repo yapısı
 
 ```text

@@ -16,6 +16,7 @@ class FakeNotice:
     entity_id: str
     sex: str
     nationalities: tuple[str, ...]
+    issuers: tuple[str, ...]
     age: int | None
 
 
@@ -44,6 +45,8 @@ def _matches(notice: FakeNotice, query: dict[str, str | int]) -> bool:
         return False
     if "nationality" in query and query["nationality"] not in notice.nationalities:
         return False
+    if "arrestWarrantCountryId" in query and query["arrestWarrantCountryId"] not in notice.issuers:
+        return False
     if "ageMin" in query or "ageMax" in query:
         if notice.age is None:
             return False
@@ -57,11 +60,15 @@ def make_notices(
     *,
     sex: str = "M",
     nationalities: tuple[str, ...] = ("TR",),
+    issuers: tuple[str, ...] | None = None,
     age: int | None = 30,
     first_id: int = 1,
 ) -> list[FakeNotice]:
+    """Make notices; unless given, the warrants are issued by the first nationality."""
+    if issuers is None:
+        issuers = nationalities[:1] or ("TR",)
     return [
-        FakeNotice(f"2026/{number}", sex, nationalities, age)
+        FakeNotice(f"2026/{number}", sex, nationalities, issuers, age)
         for number in range(first_id, first_id + count)
     ]
 
@@ -93,7 +100,7 @@ def test_large_list_is_split_by_sex() -> None:
     assert lister.requests == [{}, {"sexId": "M"}, {"sexId": "F"}, {"sexId": "U"}]
 
 
-def test_large_sex_group_is_split_by_nationality() -> None:
+def test_large_sex_group_is_split_by_issuing_country() -> None:
     notices = make_notices(120, nationalities=("TR",)) + make_notices(
         80, nationalities=("RU",), first_id=121
     )
@@ -103,15 +110,15 @@ def test_large_sex_group_is_split_by_nationality() -> None:
 
     assert result.entity_ids == ids_of(notices)
     assert result.complete
-    assert {"sexId": "M", "nationality": "TR"} in lister.requests
-    assert {"sexId": "M", "nationality": "DE"} in lister.requests
+    assert {"sexId": "M", "arrestWarrantCountryId": "TR"} in lister.requests
+    assert {"sexId": "M", "arrestWarrantCountryId": "DE"} in lister.requests
 
 
-def test_notice_with_two_nationalities_is_collected_once() -> None:
+def test_notice_with_warrants_from_two_countries_is_collected_once() -> None:
     notices = (
-        make_notices(90, nationalities=("TR", "RU"))
-        + make_notices(50, nationalities=("TR",), first_id=91)
-        + make_notices(30, nationalities=("RU",), first_id=141)
+        make_notices(90, issuers=("TR", "RU"))
+        + make_notices(50, issuers=("TR",), first_id=91)
+        + make_notices(30, issuers=("RU",), first_id=141)
     )
     lister = FakeLister(notices)
 
@@ -121,7 +128,7 @@ def test_notice_with_two_nationalities_is_collected_once() -> None:
     assert result.complete
 
 
-def test_large_nationality_group_is_split_by_halving_the_age_range() -> None:
+def test_large_issuing_country_group_is_split_by_halving_the_age_range() -> None:
     notices = [
         notice
         for age in range(20, 40)
@@ -133,8 +140,9 @@ def test_large_nationality_group_is_split_by_halving_the_age_range() -> None:
 
     assert result.entity_ids == ids_of(notices)
     assert result.complete
-    assert {"sexId": "M", "nationality": "RU", "ageMin": 0, "ageMax": 60} in lister.requests
-    assert {"sexId": "M", "nationality": "RU", "ageMin": 61, "ageMax": 120} in lister.requests
+    rus = {"sexId": "M", "arrestWarrantCountryId": "RU"}
+    assert {**rus, "ageMin": 0, "ageMax": 60} in lister.requests
+    assert {**rus, "ageMin": 61, "ageMax": 120} in lister.requests
     assert result.age_split_requests > 0
 
 
@@ -231,3 +239,26 @@ def test_scan_stops_sending_requests_when_asked_to_stop() -> None:
 
     assert len(lister.requests) == stop_after
     assert not result.complete
+
+
+def test_single_age_above_the_limit_is_split_by_nationality() -> None:
+    russians = make_notices(160, nationalities=("RU",), age=37)
+    others = make_notices(2, nationalities=("DE",), issuers=("RU",), age=37, first_id=200)
+    lister = FakeLister(russians + others)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert result.entity_ids == ids_of(russians + others)
+    assert result.complete
+    leaf = {"sexId": "M", "arrestWarrantCountryId": "RU", "ageMin": 37, "ageMax": 37}
+    assert {**leaf, "nationality": "RU"} in lister.requests
+
+
+def test_notice_without_nationality_is_found_through_its_warrant() -> None:
+    stateless = make_notices(1, nationalities=(), issuers=("DE",))
+    notices = stateless + make_notices(170, first_id=2)
+    lister = FakeLister(notices)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert ids_of(stateless) <= result.entity_ids

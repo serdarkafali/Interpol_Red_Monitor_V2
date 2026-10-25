@@ -1,7 +1,8 @@
-"""Collects every notice id on the Interpol list by splitting queries (ADR 0006).
+"""Collects every notice id on the Interpol list by splitting queries (ADR 0006, 0007).
 
-A query returns at most 160 notices, so a group above that size is split by sex,
-then by nationality, then by halving the age range, until every group fits in one
+A query returns at most 160 notices, so a group above that size is split by sex, then
+by the country that issued the arrest warrant, then by halving the age range, and a
+single age that is still too large by nationality, until every group fits in one
 request. The scanner only reads the list; it does not fetch details or produce events.
 """
 
@@ -51,7 +52,7 @@ class _Progress:
 
 
 def iso_country_codes() -> tuple[str, ...]:
-    """Return the ISO 3166-1 alpha-2 codes used to split queries by nationality."""
+    """Return the ISO 3166-1 alpha-2 codes used to split by issuing country and nationality."""
     return tuple(sorted(country.alpha_2 for country in pycountry.countries))
 
 
@@ -126,18 +127,20 @@ class ListScanner:
         """Return the sub-queries of a group and whether their totals must add up."""
         if "sexId" not in filters:
             return [{**filters, "sexId": sex} for sex in SEXES], True
-        if "nationality" not in filters:
-            return [{**filters, "nationality": code} for code in self._countries], False
+        if "arrestWarrantCountryId" not in filters:
+            return [{**filters, "arrestWarrantCountryId": code} for code in self._countries], False
         low = int(filters.get("ageMin", MIN_AGE))
         high = int(filters.get("ageMax", MAX_AGE))
-        if low == high:
-            return None
-        middle = (low + high) // 2
-        halves: list[dict[str, str | int]] = [
-            {**filters, "ageMin": low, "ageMax": middle},
-            {**filters, "ageMin": middle + 1, "ageMax": high},
-        ]
-        return halves, True
+        if low < high:
+            middle = (low + high) // 2
+            halves: list[dict[str, str | int]] = [
+                {**filters, "ageMin": low, "ageMax": middle},
+                {**filters, "ageMin": middle + 1, "ageMax": high},
+            ]
+            return halves, True
+        if "nationality" not in filters:
+            return [{**filters, "nationality": code} for code in self._countries], False
+        return None
 
     def _fetch(self, filters: Filters, progress: _Progress) -> ListPage | None:
         if self._should_stop():

@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, NonNegativeInt, ValidationErr
 from interpol_observability import get_logger
 
 PAGE_SIZE = 160
-ALLOWED_FILTERS = frozenset(["sexId", "nationality", "ageMin", "ageMax"])
+ALLOWED_FILTERS = frozenset(["sexId", "arrestWarrantCountryId", "nationality", "ageMin", "ageMax"])
 RETRYABLE_STATUS_CODES = frozenset([429, 500, 502, 503, 504])
 RETRY_BACKOFF_SECONDS = 20.0
 
