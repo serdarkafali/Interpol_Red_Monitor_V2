@@ -73,6 +73,11 @@ Bir kayıt, **art arda iki tam taramada** görülmezse `notice.removed` gönderi
 taramada görülmemesi, tarama sırasında değişen sıralama veya geçici bir API davranışı
 yüzünden olabilir.
 
+Bir taramadan sonra kaldırılacak kayıtlar bilinen kayıtların %5'ini aşarsa hiçbiri
+kaldırılmaz ve hata loglanır. API'nin tutarlı görünen ama eksik cevaplar döndürmesi
+gibi tamlık kontrolünün yakalayamayacağı bir durumda toplu silmeyi önlemek için; sınır
+ölçümlere göre ayarlanabilir.
+
 ### Görülme olayı
 
 Liste taramasında görülen her kayıt için detay taşımayan `notice.seen` olayı gönderilir;
