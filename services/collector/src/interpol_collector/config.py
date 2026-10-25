@@ -20,7 +20,6 @@ class CollectorSettings(BaseSettings):
     )
 
     interpol_api_base_url: HttpUrl = HttpUrl("https://ws-public.interpol.int/notices/v1/red")
-    page_size: int = Field(default=20, ge=1, le=160)
     request_delay_min_seconds: float = Field(default=5.0, ge=0)
     request_delay_max_seconds: float = Field(default=8.0, ge=0)
     log_level: LogLevel = "INFO"
