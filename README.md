@@ -65,6 +65,17 @@ cd libs/db; uv run alembic upgrade head; cd ../..
 
 Veritabanı ve migration'larla ilgili ayrıntılar: [`libs/db/README.md`](libs/db/README.md).
 
+
+Collector'ı çalıştırmak (varsayılan olarak dry-run: Kafka'ya bir şey yazmaz):
+
+```powershell
+uv run --env-file .env --package interpol-collector interpol-collector
+# ya da Docker ile:
+docker compose --profile collector up -d --build collector
+```
+
+Ayrıntılar: [`services/collector/README.md`](services/collector/README.md).
+
 ## Kontroller
 
 CI her pull request'te aynı komutları çalıştırır:
