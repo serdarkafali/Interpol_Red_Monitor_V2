@@ -55,7 +55,7 @@ def run_migrations_online(url: str) -> None:
             context.run_migrations()
 
 
-database_url = MigrationSettings().database_url  # type: ignore[call-arg]
+database_url = MigrationSettings().database_url
 if context.is_offline_mode():
     run_migrations_offline(database_url)
 else:

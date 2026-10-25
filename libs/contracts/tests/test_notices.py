@@ -144,4 +144,4 @@ def test_events_cannot_be_modified() -> None:
     event = make_observed()
 
     with pytest.raises(ValidationError):
-        event.entity_id = "2026/99999"
+        event.entity_id = "2026/99999"  # type: ignore[misc]
