@@ -78,7 +78,7 @@ class _NoticeEvent(BaseModel):
 
 
 class NoticeObserved(_NoticeEvent):
-    """The collector saw the notice on Interpol's list during a scan."""
+    """The collector fetched the notice's detail and photo list (ADR 0006)."""
 
     event_type: Literal["notice.observed"] = "notice.observed"
     payload: NoticeSnapshot
