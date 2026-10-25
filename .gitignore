@@ -23,3 +23,6 @@ htmlcov/
 
 # Interpol API'den toplanan gerçek örnek veriler (kişisel veri, repoya girmez)
 samples/
+
+# Servislerin yerel çalışırken yazdığı durum dosyaları (entity_id listeleri içerir)
+var/
