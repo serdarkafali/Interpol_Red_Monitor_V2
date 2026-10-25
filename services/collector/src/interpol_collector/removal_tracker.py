@@ -5,7 +5,6 @@ A notice is removed only after it is missing from two consecutive complete list 
 never causes a removal: when in doubt, the tracker keeps notices rather than drop them.
 """
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -13,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ValidationError
 
 from interpol_collector.list_scanner import ListScanResult
+from interpol_collector.state_io import write_text_atomically
 from interpol_observability import get_logger
 
 DEFAULT_MAX_REMOVED_FRACTION = 0.05
@@ -96,16 +96,10 @@ class StateFile:
         )
 
     def save(self, state: RemovalState) -> None:
-        """Write the state to a temporary file, then move it over the real one."""
+        """Write the state atomically; a crash never leaves a half-written file."""
         document = _StateDocument(
             version=1,
             present=sorted(state.present),
             missing_once=sorted(state.missing_once),
         )
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self._path.with_name(self._path.name + ".tmp")
-        with temporary.open("w", encoding="utf-8") as file:
-            file.write(document.model_dump_json())
-            file.flush()
-            os.fsync(file.fileno())
-        os.replace(temporary, self._path)
+        write_text_atomically(self._path, document.model_dump_json())
