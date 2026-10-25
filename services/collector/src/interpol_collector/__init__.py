@@ -15,8 +15,4 @@ def main() -> None:
         log_format=settings.log_format,
     )
     logger = get_logger(__name__)
-    logger.info(
-        "collector_starting",
-        api_base_url=str(settings.interpol_api_base_url),
-        page_size=settings.page_size,
-    )
+    logger.info("collector_starting", api_base_url=str(settings.interpol_api_base_url))

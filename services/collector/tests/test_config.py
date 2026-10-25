@@ -9,16 +9,16 @@ from interpol_collector.config import CollectorSettings
 def test_defaults_are_valid() -> None:
     settings = CollectorSettings(_env_file=None)
 
-    assert settings.page_size == 20
+    assert settings.request_delay_min_seconds == 5.0
     assert settings.log_level == "INFO"
 
 
 def test_environment_variable_overrides_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("COLLECTOR_PAGE_SIZE", "50")
+    monkeypatch.setenv("COLLECTOR_LOG_LEVEL", "DEBUG")
 
     settings = CollectorSettings(_env_file=None)
 
-    assert settings.page_size == 50
+    assert settings.log_level == "DEBUG"
 
 
 def test_min_delay_greater_than_max_delay_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -31,16 +31,6 @@ def test_min_delay_greater_than_max_delay_is_rejected(monkeypatch: pytest.Monkey
 
 def test_unknown_log_level_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COLLECTOR_LOG_LEVEL", "LOUD")
-
-    with pytest.raises(ValidationError):
-        CollectorSettings(_env_file=None)
-
-
-@pytest.mark.parametrize("page_size", ["0", "-5", "161"])
-def test_out_of_range_page_size_is_rejected(
-    monkeypatch: pytest.MonkeyPatch, page_size: str
-) -> None:
-    monkeypatch.setenv("COLLECTOR_PAGE_SIZE", page_size)
 
     with pytest.raises(ValidationError):
         CollectorSettings(_env_file=None)
