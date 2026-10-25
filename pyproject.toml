@@ -30,7 +30,8 @@ known-first-party = ["interpol_*"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["libs/*/src", "services/*/src"]
+files = ["libs/*/src", "libs/*/tests", "services/*/src", "services/*/tests"]
+plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["libs", "services"]
