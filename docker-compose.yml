@@ -81,6 +81,35 @@ services:
         done
         $$topics --bootstrap-server kafka:19092 --describe
 
+  collector:
+    # Not started by a plain "docker compose up", because it reads the real Interpol API:
+    # docker compose --profile collector up -d --build collector
+    profiles: ["collector"]
+    build:
+      context: .
+      dockerfile: services/collector/Dockerfile
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      COLLECTOR_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      # Dry run unless .env says otherwise: nothing is written to Kafka (ADR 0006).
+      COLLECTOR_DRY_RUN: ${COLLECTOR_DRY_RUN:-true}
+      COLLECTOR_LOG_LEVEL: ${COLLECTOR_LOG_LEVEL:-INFO}
+      COLLECTOR_LOG_FORMAT: json
+    volumes:
+      # Removal state and detail schedule survive container restarts.
+      - collector-state:/var/lib/collector
+    # Time to finish the current step and save the state after "docker compose stop".
+    stop_grace_period: 60s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
 volumes:
   postgres-data:
   kafka-data:
+  collector-state:
