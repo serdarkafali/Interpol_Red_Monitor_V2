@@ -4,8 +4,8 @@ Interpol'ün herkese açık Red Notice API'sindeki kayıtları düzenli olarak t
 PostgreSQL'de saklayan ve ileride fotoğraflar üzerinden yüz benzerliği araması yapacak
 servislerden oluşan bir sistem.
 
-> **Durum:** Geliştirme aşamasında. Altyapı (Faz 0) ve veritabanı şeması (Faz 1) hazır;
-> servisler sırayla yazılıyor.
+> **Durum:** Geliştirme aşamasında. Altyapı (Faz 0), veritabanı şeması (Faz 1) ve
+> collector (Faz 2) hazır; sırada ingestor (Faz 3) var.
 
 ## Mimari
 
