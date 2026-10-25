@@ -79,3 +79,26 @@ yaklaşık 250 istek (yarım saat) ekliyor. `M, RU, 37` içindeki RU uyruklular 
 daha eklenirse grup yine bölünemez hale gelir ve tarama eksik biter. Bu durumda hata
 loglanıyor ve Faz 7'de alarm olacak. Düzenleyen ülkesi girilmemiş bir kayıt varsa artık o
 görünmeyecek; bunu doğrudan ölçemiyoruz, `seen` ile `reported_total` farkı izlenecek.
+
+## Doğrulama
+
+Yeni sırayla yapılan ikinci dry-run (2026-10-25/26) beklentiyi doğruladı:
+
+| Ölçüm | İlk dry-run (uyruk) | İkinci dry-run (düzenleyen ülke) |
+| --- | --- | --- |
+| Tarama tam mı? | Hayır (`M, RU, 37` bölünemedi) | **Evet** |
+| Görülen / toplam | 6269 / 6378 (109 eksik) | **6357 / 6378 (21 eksik)** |
+| Bölünemeyen grup | 1 | 0 |
+| İstek sayısı | 574 | 831 |
+| Yaş bölmesi istekleri | 72 | 329 |
+| Süre | yaklaşık 65 dakika | yaklaşık 90 dakika |
+
+Görülmeyen kayıtların 88'i artık görünüyor; uyruğu girilmemiş kayıt hipotezini destekliyor.
+Kalan 21 kaydın bir kısmı doğum tarihi olmayan kayıtlar (`M, IN` kararları 282 → 278);
+fark metrik olarak izlenmeye devam ediyor.
+
+Bedel beklenenden büyük çıktı: kararı çıkaran ülke grupları uyruk gruplarından daha büyük
+(RU'nun kararları 3135), bu yüzden yaş bölmesi istekleri 72'den 329'a çıktı ve tarama 25
+dakika uzadı. Tarama süresi 6 saatlik aralığın dörtte birine yaklaştığı için ADR 0006'da
+ertelenen warm start (önceki taramanın yaş sınırlarıyla başlamak) artık değerlendirilmeye
+değer: yaş bölmesi isteklerinin önemli bir kısmını kaldırabilir.
