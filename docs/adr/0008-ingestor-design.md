@@ -175,3 +175,27 @@ loglarında görünecek; bunların takibi Faz 7'deki alarmlara kalıyor. Listede
 fotoğrafın satırı silindiğinde MinIO'daki dosyasının da silinmesi Faz 4'te `face-worker`
 ile birlikte ele alınacak. Kafka ile gerçek bir entegrasyon testi henüz yok; consumer
 döngüsü sahte bir consumer ile test ediliyor.
+
+## Doğrulama
+
+Uçtan uca deneme (2026-10-26) Docker Compose ile yapıldı: `migrate` ve `kafka-init`
+başarıyla bitti, `ingestor` ardından başladı. `scripts/produce_fake_events.py` ile Kafka'ya
+yazılan uydurma olaylar (gerçek veri yok, `entity_id`'ler 1900 yılıyla başlıyor) her yolun
+beklendiği gibi çalıştığını gösterdi:
+
+| Olay | Sonuç |
+| --- | --- |
+| Aynı içerikle iki kez `observed`, ardından `seen` | Tek `notice_written`; tekrar ve `seen` hiçbir şey yazmadı |
+| Aralık dışı kilo | Kilo `NULL`, `notice_values_dropped` uyarısı |
+| `observed` ardından `removed` | Kayıt soft delete edildi |
+| JSON olmayan mesaj | DLQ, `invalid_message` / `json_invalid` |
+| Ülke kodu bozuk tutuklama emri | DLQ, `notice_rejected` / `arrest_warrant_country_invalid` |
+| Bilinmeyen ülke kodu | `countries` tablosuna adı boş olarak eklendi |
+| Hiç `observed` gelmemiş kayıt için `seen` | Hiçbir şey yapılmadı |
+
+Loglar mesajların gönderildiği sıradan farklı sırada geldi; mesajlar `entity_id`'ye göre üç
+partition'a dağıldığı için bu beklenen durum. Aynı kaydın olayları sırasını korudu.
+
+Deneme sırasında librdkafka'nın kendi loglarının JSON yerine düz metin olarak stderr'e
+yazıldığı görüldü. Kafka istemcilerine `interpol_observability.kafka_client_logger()`
+verilerek bu loglar da servisin JSON formatına alındı (Faz 7'deki ELK için gerekli).

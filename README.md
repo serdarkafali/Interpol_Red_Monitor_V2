@@ -4,8 +4,8 @@ Interpol'ün herkese açık Red Notice API'sindeki kayıtları düzenli olarak t
 PostgreSQL'de saklayan ve ileride fotoğraflar üzerinden yüz benzerliği araması yapacak
 servislerden oluşan bir sistem.
 
-> **Durum:** Geliştirme aşamasında. Altyapı (Faz 0), veritabanı şeması (Faz 1) ve
-> collector (Faz 2) hazır; sırada ingestor (Faz 3) var.
+> **Durum:** Geliştirme aşamasında. Altyapı (Faz 0), veritabanı şeması (Faz 1),
+> collector (Faz 2) ve ingestor (Faz 3) hazır; sırada face-worker ve MinIO (Faz 4) var.
 
 ## Mimari
 
@@ -63,9 +63,11 @@ uv sync --all-packages             # sanal ortam ve tüm bağımlılıklar
 uv run pre-commit install          # commit öncesi kontroller
 
 Copy-Item .env.example .env        # sonra .env içindeki şifreleri değiştirin
-docker compose up -d               # PostgreSQL 18 + pgvector, Kafka
-cd libs/db; uv run alembic upgrade head; cd ../..
+docker compose up -d --build       # PostgreSQL 18 + pgvector, Kafka, migrate, ingestor
 ```
+
+`docker compose up` migration'ları ayrı bir `migrate` adımında uygular. Docker dışında
+uygulamak için: `cd libs/db; uv run alembic upgrade head; cd ../..`
 
 Veritabanı ve migration'larla ilgili ayrıntılar: [`libs/db/README.md`](libs/db/README.md).
 
@@ -79,6 +81,16 @@ docker compose --profile collector up -d --build collector
 ```
 
 Ayrıntılar: [`services/collector/README.md`](services/collector/README.md).
+
+Ingestor, Kafka'daki olayları veritabanına yazar ve `docker compose up` ile başlar.
+Uçtan uca denemek için Kafka'ya uydurma olaylar yazılabilir (gerçek veri içermez):
+
+```powershell
+uv run --env-file .env python scripts/produce_fake_events.py
+docker compose logs ingestor
+```
+
+Ayrıntılar: [`services/ingestor/README.md`](services/ingestor/README.md).
 
 ## Kontroller
 
