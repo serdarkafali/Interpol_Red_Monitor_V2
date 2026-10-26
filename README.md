@@ -28,6 +28,8 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0005](docs/adr/0005-kafka-topics-and-message-contract.md) | Kafka topic'leri ve mesaj sözleşmesi |
 | [0006](docs/adr/0006-collector-scan-strategy.md) | Collector tarama stratejisi |
 | [0007](docs/adr/0007-split-by-issuing-country.md) | Sorguları yakalama kararını çıkaran ülkeye göre bölmek |
+| [0008](docs/adr/0008-ingestor-design.md) | Ingestor'ın olayları veritabanına yazması |
+
 ## Repo yapısı
 
 ```text
@@ -37,6 +39,7 @@ libs/
   observability/   Ortak loglama altyapısı
 services/
   collector/       Interpol API'sinden kayıtları toplayan servis
+  ingestor/        Kafka'daki olayları PostgreSQL'e yazan servis
 scripts/           Tek seferlik araçlar (API örnekleme ve analiz)
 docs/adr/          Mimari karar kayıtları
 ```

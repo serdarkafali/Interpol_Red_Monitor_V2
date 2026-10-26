@@ -1,0 +1,29 @@
+[project]
+name = "interpol-ingestor"
+version = "0.1.0"
+description = "Kafka'daki red notice olaylarını PostgreSQL'e yazan servis"
+readme = "README.md"
+authors = [
+    { name = "Serdar", email = "serdarkfl8@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "confluent-kafka>=2.16.0",
+    "interpol-contracts",
+    "interpol-db",
+    "interpol-observability",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy>=2.1.5",
+]
+
+[project.scripts]
+interpol-ingestor = "interpol_ingestor:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+interpol-contracts = { workspace = true }
+interpol-db = { workspace = true }
+interpol-observability = { workspace = true }

@@ -11,6 +11,7 @@ members = [
     "interpol-collector",
     "interpol-contracts",
     "interpol-db",
+    "interpol-ingestor",
     "interpol-monitor",
     "interpol-observability",
 ]
@@ -518,6 +519,29 @@ dependencies = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
+    { name = "pydantic-settings", specifier = ">=2.15.0" },
+    { name = "sqlalchemy", specifier = ">=2.1.5" },
+]
+
+[[package]]
+name = "interpol-ingestor"
+version = "0.1.0"
+source = { editable = "services/ingestor" }
+dependencies = [
+    { name = "confluent-kafka" },
+    { name = "interpol-contracts" },
+    { name = "interpol-db" },
+    { name = "interpol-observability" },
+    { name = "pydantic-settings" },
+    { name = "sqlalchemy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "confluent-kafka", specifier = ">=2.16.0" },
+    { name = "interpol-contracts", editable = "libs/contracts" },
+    { name = "interpol-db", editable = "libs/db" },
+    { name = "interpol-observability", editable = "libs/observability" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "sqlalchemy", specifier = ">=2.1.5" },
 ]
