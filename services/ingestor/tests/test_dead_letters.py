@@ -39,6 +39,9 @@ class FakeProducer:
         self.produced.append({"topic": topic, "value": value, "key": key, "headers": headers})
         self._report = on_delivery
 
+    def poll(self, timeout: float) -> int:
+        return 0
+
     def flush(self, timeout: float) -> int:
         assert self._report is not None
         self._report(KafkaError(KafkaError._MSG_TIMED_OUT) if self._fail else None, None)
