@@ -21,6 +21,15 @@ from interpol_observability import get_logger
 
 logger = get_logger(__name__)
 
+# At-least-once (ADR 0005, ADR 0008): offsets are stored by the loop after a message was
+# handled and committed in the background; without a committed offset (first start) the
+# topic is read from the beginning instead of skipping what was written before.
+CONSUMER_SETTINGS: dict[str, str | bool] = {
+    "enable.auto.offset.store": False,
+    "enable.auto.commit": True,
+    "auto.offset.reset": "earliest",
+}
+
 FIRST_RETRY_DELAY_SECONDS = 5.0
 MAX_RETRY_DELAY_SECONDS = 60.0
 
@@ -47,6 +56,8 @@ class DeadLetters(Protocol):
     """Where unstorable messages go; the DeadLetterWriter fits."""
 
     def send(self, message: Message, error: DeadLetterError) -> None: ...
+
+    def poll(self) -> None: ...
 
 
 class IngestorService:
@@ -82,6 +93,7 @@ class IngestorService:
 
     def step(self) -> None:
         """Poll once and process the message, if any."""
+        self._dead_letters.poll()
         message = self._consumer.poll(self._poll_timeout_seconds)
         if message is None:
             return

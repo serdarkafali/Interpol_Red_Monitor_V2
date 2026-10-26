@@ -81,6 +81,19 @@ services:
         done
         $$topics --bootstrap-server kafka:19092 --describe
 
+  migrate:
+    # Runs once after PostgreSQL is healthy and applies the Alembic migrations, so that
+    # no service needs the right to change the schema (ADR 0004, ADR 0008).
+    build:
+      context: .
+      dockerfile: libs/db/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    restart: "no"
+
   collector:
     # Not started by a plain "docker compose up", because it reads the real Interpol API:
     # docker compose --profile collector up -d --build collector
@@ -102,6 +115,32 @@ services:
       - collector-state:/var/lib/collector
     # Time to finish the current step and save the state after "docker compose stop".
     stop_grace_period: 60s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  ingestor:
+    # Reads the notices topic and writes PostgreSQL (ADR 0008). Starts only after the
+    # schema and the topics exist.
+    build:
+      context: .
+      dockerfile: services/ingestor/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      INGESTOR_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      INGESTOR_KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      INGESTOR_IGNORE_CONTENT_HASH: ${INGESTOR_IGNORE_CONTENT_HASH:-false}
+      INGESTOR_LOG_LEVEL: ${INGESTOR_LOG_LEVEL:-INFO}
+      INGESTOR_LOG_FORMAT: json
+    # Time to finish the current message and commit its offset after "docker compose stop".
+    stop_grace_period: 30s
     restart: unless-stopped
     logging:
       driver: json-file

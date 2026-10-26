@@ -12,6 +12,7 @@ from typing import Any, Protocol, Self
 from confluent_kafka import KafkaError, Message, Producer
 
 from interpol_ingestor.handler import DeadLetterError
+from interpol_observability import kafka_client_logger
 
 DEAD_LETTER_TOPIC = "ingestor.dlq"
 
@@ -40,6 +41,8 @@ class DeadLetterProducer(Protocol):
 
     def flush(self, timeout: float) -> int: ...
 
+    def poll(self, timeout: float) -> int: ...
+
 
 class DeadLetterWriter:
     """Sends one failed message at a time and waits for Kafka's acknowledgement."""
@@ -59,7 +62,11 @@ class DeadLetterWriter:
     @classmethod
     def connect(cls, bootstrap_servers: str, *, client_id: str = "ingestor") -> Self:
         """Create a writer backed by a real Kafka producer."""
-        settings = {"bootstrap.servers": bootstrap_servers, "client.id": client_id}
+        settings = {
+            "bootstrap.servers": bootstrap_servers,
+            "client.id": client_id,
+            "logger": kafka_client_logger(),
+        }
         return cls(Producer({**settings, **PRODUCER_SETTINGS}))
 
     def send(self, message: Message, error: DeadLetterError) -> None:
@@ -75,6 +82,14 @@ class DeadLetterWriter:
         errors, self._errors = self._errors, []
         if remaining or errors:
             raise DeadLetterSendError(f"{remaining} undelivered, {len(errors)} failed")
+
+    def poll(self) -> None:
+        """Serve the producer's pending callbacks, such as its log messages, without waiting.
+
+        Called on every loop step: dead letters are rare, and without polling the
+        producer's own logs (e.g. lost broker connections) would wait for the next send.
+        """
+        self._producer.poll(0)
 
     def _report(self, error: KafkaError | None, _message: Any) -> None:
         if error is not None:

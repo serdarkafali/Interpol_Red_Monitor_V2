@@ -63,11 +63,15 @@ class FakeDeadLetters:
     def __init__(self, *failures: Exception) -> None:
         self.failures = deque(failures)
         self.sent: list[tuple[int | None, str]] = []
+        self.polls = 0
 
     def send(self, message: Message, error: DeadLetterError) -> None:
         if self.failures:
             raise self.failures.popleft()
         self.sent.append((message.offset(), error.error_type))
+
+    def poll(self) -> None:
+        self.polls += 1
 
 
 def service(
@@ -94,6 +98,16 @@ def test_offsets_are_stored_after_each_handled_message() -> None:
     loop.step()  # nothing to poll
 
     assert consumer.stored == [0, 1]
+
+
+def test_every_step_serves_the_dead_letter_producer() -> None:
+    dead_letters = FakeDeadLetters()
+
+    loop = service(FakeConsumer(kafka_message(0)), FakeHandler(), dead_letters)
+    loop.step()
+    loop.step()
+
+    assert dead_letters.polls == 2
 
 
 def test_a_dead_letter_is_sent_before_its_offset_is_stored() -> None:

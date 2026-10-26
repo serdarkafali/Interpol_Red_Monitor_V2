@@ -72,3 +72,14 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """Return a structured logger; pass ``__name__`` as the name."""
     logger: structlog.stdlib.BoundLogger = structlog.stdlib.get_logger(name)
     return logger
+
+
+def kafka_client_logger() -> logging.Logger:
+    """Return the logger to pass as confluent-kafka's ``logger`` setting.
+
+    librdkafka is a C library: without this setting it writes its own logs straight to
+    stderr in its own plain-text format, bypassing the formatter configured above. With
+    it, they go through standard logging and are rendered like every other log. They
+    are delivered while the client's ``poll`` or ``flush`` runs.
+    """
+    return logging.getLogger("librdkafka")

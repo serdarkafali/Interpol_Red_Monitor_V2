@@ -12,7 +12,7 @@ from typing import Any, Protocol, Self
 from confluent_kafka import KafkaError, Producer
 
 from interpol_contracts import NOTICES_TOPIC, NoticeEvent, event_key, serialize_event
-from interpol_observability import get_logger
+from interpol_observability import get_logger, kafka_client_logger
 
 PRODUCER_SETTINGS: dict[str, str | bool] = {
     "acks": "all",
@@ -69,7 +69,12 @@ class KafkaEventPublisher:
     @classmethod
     def connect(cls, bootstrap_servers: str, *, client_id: str = "collector") -> Self:
         """Create a publisher backed by a real Kafka producer."""
-        settings = {"bootstrap.servers": bootstrap_servers, "client.id": client_id}
+        settings = {
+            "bootstrap.servers": bootstrap_servers,
+            "client.id": client_id,
+            # librdkafka's own logs in our JSON format instead of plain text on stderr.
+            "logger": kafka_client_logger(),
+        }
         return cls(Producer({**settings, **PRODUCER_SETTINGS}))
 
     def publish(self, event: NoticeEvent) -> None:
