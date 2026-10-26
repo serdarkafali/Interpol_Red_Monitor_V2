@@ -56,12 +56,18 @@ tekrar gelir; yazmalar idempotent olduğu için sonuç değişmez.
 - `deleted_at`'e dokunulmaz. Kaydın listede olup olmadığının kaynağı liste taramasıdır;
   bunu yalnızca `notice.seen` ve `notice.removed` değiştirir.
 
-**`notice.seen`:** `last_seen_at = GREATEST(last_seen_at, occurred_at)` ve
-`deleted_at = NULL`; kaldırılmış bir kayıt listeye döndüyse böylece geri gelir (ADR 0004).
-`GREATEST`, eski bir olayın yeniden işlenmesinde zamanın geri gitmesini engeller.
+**`notice.seen`:** `last_seen_at = GREATEST(last_seen_at, occurred_at)` ve, silinme
+zamanı olaydan önceyse, `deleted_at = NULL`; kaldırılmış bir kayıt listeye döndüyse
+böylece geri gelir (ADR 0004).
 
-**`notice.removed`:** `deleted_at = occurred_at`, yalnızca `deleted_at` boşsa. Zaten
-silinmiş bir kaydın silinme zamanı değişmez; 50 günlük süre ilk silinmeden sayılır.
+**`notice.removed`:** `deleted_at = occurred_at`, yalnızca `deleted_at` boşsa ve kayıt
+olaydan sonra görülmemişse (`last_seen_at <= occurred_at`). Zaten silinmiş bir kaydın
+silinme zamanı değişmez; 50 günlük süre ilk silinmeden sayılır.
+
+Zaman karşılaştırmaları, olaylar sırasız işlense bile (örneğin DLQ'dan geri yüklenen eski
+bir mesaj) sonucun olayların zamanına göre doğru kalmasını sağlıyor: eski bir `seen`
+zamanı geri götüremez ve daha yeni bir silmeyi geri alamaz; eski bir `removed` daha sonra
+görülmüş bir kaydı silemez.
 
 Veritabanında olmayan bir kayıt için gelen `seen` ve `removed` hiçbir şey yapmaz. `seen`
 için bu normal: detay henüz çekilmedi ve kayıt `observed` ile gelecek.
