@@ -97,8 +97,10 @@ Görülmeyen kayıtların 88'i artık görünüyor; uyruğu girilmemiş kayıt h
 Kalan 21 kaydın bir kısmı doğum tarihi olmayan kayıtlar (`M, IN` kararları 282 → 278);
 fark metrik olarak izlenmeye devam ediyor.
 
-Bedel beklenenden büyük çıktı: kararı çıkaran ülke grupları uyruk gruplarından daha büyük
-(RU'nun kararları 3135), bu yüzden yaş bölmesi istekleri 72'den 329'a çıktı ve tarama 25
-dakika uzadı. Tarama süresi 6 saatlik aralığın dörtte birine yaklaştığı için ADR 0006'da
-ertelenen warm start (önceki taramanın yaş sınırlarıyla başlamak) artık değerlendirilmeye
-değer: yaş bölmesi isteklerinin önemli bir kısmını kaldırabilir.
+Bedel beklenenden büyük çıktı: istekler 574'ten 831'e çıktı, tarama yaklaşık 25 dakika
+uzadı. Artışın neredeyse tamamı dördüncü adımdan geliyor: `M, RU çıkaran, 37` grubu 249
+ülkenin her biri için ayrı bir uyruk sorgusuyla bölündü. Bu sorgular `ageMin` taşıdığı için
+`age_split_requests` sayacına da girdi; 329'un 249'u bunlar, asıl yaş bölmesi istekleri 72'den
+yaklaşık 80'e çıktı. İyileştirme gerekirse önce bu adım ele alınmalı (örneğin grubun
+toplamına ulaşılınca durmak); ADR 0006'da ertelenen warm start'ın getirisi sınırlı kalır.
+Sayaçların ayrılması, yani dördüncü adımın isteklerinin ayrı sayılması, bu yüzden faydalı.
