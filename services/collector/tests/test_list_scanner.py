@@ -18,6 +18,8 @@ class FakeNotice:
     nationalities: tuple[str, ...]
     issuers: tuple[str, ...]
     age: int | None
+    name: str = "TESTER"
+    forename: str = "SAMPLE"
 
 
 class FakeLister:
@@ -47,6 +49,11 @@ def _matches(notice: FakeNotice, query: dict[str, str | int]) -> bool:
         return False
     if "arrestWarrantCountryId" in query and query["arrestWarrantCountryId"] not in notice.issuers:
         return False
+    # Interpol's name filters match names containing the value (ADR 0009).
+    if "name" in query and str(query["name"]) not in notice.name:
+        return False
+    if "forename" in query and str(query["forename"]) not in notice.forename:
+        return False
     if "ageMin" in query or "ageMax" in query:
         if notice.age is None:
             return False
@@ -63,12 +70,14 @@ def make_notices(
     issuers: tuple[str, ...] | None = None,
     age: int | None = 30,
     first_id: int = 1,
+    name: str = "TESTER",
+    forename: str = "SAMPLE",
 ) -> list[FakeNotice]:
     """Make notices; unless given, the warrants are issued by the first nationality."""
     if issuers is None:
         issuers = nationalities[:1] or ("TR",)
     return [
-        FakeNotice(f"2026/{number}", sex, nationalities, issuers, age)
+        FakeNotice(f"2026/{number}", sex, nationalities, issuers, age, name, forename)
         for number in range(first_id, first_id + count)
     ]
 
@@ -146,7 +155,8 @@ def test_large_issuing_country_group_is_split_by_halving_the_age_range() -> None
     assert result.age_split_requests > 0
 
 
-def test_group_that_cannot_be_split_makes_the_scan_incomplete() -> None:
+def test_group_that_cannot_be_covered_makes_the_scan_incomplete() -> None:
+    # Everyone has the same surname: no substring query gets below 160.
     notices = make_notices(170, nationalities=("RU",), age=40)
     lister = FakeLister(notices)
 
@@ -154,7 +164,8 @@ def test_group_that_cannot_be_split_makes_the_scan_incomplete() -> None:
         result = ListScanner(lister, COUNTRIES).scan()
 
     assert not result.complete
-    assert any(log["event"] == "list_group_cannot_be_split" for log in logs)
+    assert any(log["event"] == "list_cover_incomplete" for log in logs)
+    assert all(len(str(r.get("name", ""))) <= 4 for r in lister.requests)
 
 
 def test_notice_without_birth_date_is_seen_when_its_group_is_small() -> None:
@@ -241,17 +252,82 @@ def test_scan_stops_sending_requests_when_asked_to_stop() -> None:
     assert not result.complete
 
 
-def test_single_age_above_the_limit_is_split_by_nationality() -> None:
-    russians = make_notices(160, nationalities=("RU",), age=37)
-    others = make_notices(2, nationalities=("DE",), issuers=("RU",), age=37, first_id=200)
-    lister = FakeLister(russians + others)
+LEAF = {"sexId": "M", "arrestWarrantCountryId": "RU", "ageMin": 37, "ageMax": 37}
+
+
+def test_single_age_above_the_limit_is_covered_by_surname_letters() -> None:
+    notices = make_notices(100, nationalities=("RU",), age=37, name="PETROV") + make_notices(
+        62, nationalities=("RU",), age=37, name="SIDOROV", first_id=200
+    )
+    lister = FakeLister(notices)
 
     result = ListScanner(lister, COUNTRIES).scan()
 
-    assert result.entity_ids == ids_of(russians + others)
+    assert result.entity_ids == ids_of(notices)
     assert result.complete
-    leaf = {"sexId": "M", "arrestWarrantCountryId": "RU", "ageMin": 37, "ageMax": 37}
-    assert {**leaf, "nationality": "RU"} in lister.requests
+    # The group's own capped page plus D (every SIDOROV) already reach 162, so the
+    # remaining letters are skipped.
+    assert {**LEAF, "name": "D"} in lister.requests
+    assert {**LEAF, "name": "E"} not in lister.requests
+    assert result.name_split_requests == 4
+    # The letter queries carry ageMin but are not counted as age splits.
+    assert result.age_split_requests == len([r for r in lister.requests if "ageMax" in r]) - 4
+
+
+def test_values_above_the_limit_are_extended_until_everyone_is_seen() -> None:
+    # Both surnames share every letter and every pair; only OVA tells them apart.
+    ivanov = make_notices(100, nationalities=("RU",), age=37, name="IVANOV")
+    ivanova = make_notices(70, nationalities=("RU",), age=37, name="IVANOVA", first_id=200)
+    lister = FakeLister(ivanov + ivanova)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert result.entity_ids == ids_of(ivanov + ivanova)
+    assert result.complete
+    assert {**LEAF, "name": "OVA"} in lister.requests
+
+
+def test_letters_that_cannot_reach_the_group_total_make_the_scan_incomplete() -> None:
+    # A name without any letter A-Z is found under no letter.
+    notices = make_notices(161, nationalities=("RU",), age=37, name="PETROV") + make_notices(
+        1, nationalities=("RU",), age=37, name="123", first_id=500
+    )
+    lister = FakeLister(notices)
+
+    with capture_logs() as logs:
+        result = ListScanner(lister, COUNTRIES).scan()
+
+    assert not result.complete
+    assert any(log["event"] == "list_cover_incomplete" for log in logs)
+
+
+def test_a_letter_above_the_limit_is_not_extended_when_the_others_cover_it() -> None:
+    # X matches everyone (170), but A and B together already see all 170.
+    notices = make_notices(10, nationalities=("RU",), age=37, name="AX") + make_notices(
+        160, nationalities=("RU",), age=37, name="BX", first_id=100
+    )
+    lister = FakeLister(notices)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert result.entity_ids == ids_of(notices)
+    assert result.complete
+    assert not [r for r in lister.requests if len(str(r.get("name", ""))) > 1]
+
+
+def test_a_notice_only_capped_letters_reach_is_found_by_an_extension() -> None:
+    # O and V hold more than 160 notices and their capped first 160 never include the
+    # hidden notice; the extension "VO" of O finds it.
+    many = make_notices(100, nationalities=("RU",), age=37, name="IVANOV") + make_notices(
+        65, nationalities=("RU",), age=37, name="PETROV", first_id=200
+    )
+    hidden = make_notices(1, nationalities=("RU",), age=37, name="VO", first_id=900)
+    lister = FakeLister(many + hidden)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert ids_of(hidden) <= result.entity_ids
+    assert result.complete
 
 
 def test_notice_without_nationality_is_found_through_its_warrant() -> None:
