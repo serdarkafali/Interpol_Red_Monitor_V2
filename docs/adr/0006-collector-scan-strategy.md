@@ -1,6 +1,6 @@
 # ADR 0006: Collector tarama stratejisi
 
-- **Durum:** Kabul edildi; bölme sırası ADR 0007 ile değişti
+- **Durum:** Kabul edildi; bölme sırası ADR 0007 ile, eksik taramada kaldırma kuralı ADR 0010 ile değişti
 - **Tarih:** 2026-10-21
 - **Karar verenler:** Serdar Kafalı
 - **İlişkili:** ADR 0005'in iki maddesini değiştirir (aşağıda "ADR 0005'e etkisi")

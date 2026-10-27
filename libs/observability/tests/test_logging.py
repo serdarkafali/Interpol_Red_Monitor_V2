@@ -67,3 +67,21 @@ def test_context_variables_are_attached(capsys: pytest.CaptureFixture[str]) -> N
     (record,) = _read_json_lines(capsys)
     assert record["run_id"] == "run-42"
     assert record["page"] == 3
+
+
+def test_tracebacks_never_contain_local_variables(capsys: pytest.CaptureFixture[str]) -> None:
+    configure_logging(service_name="test-service")
+
+    def fail() -> None:
+        secret = "personal value"  # noqa: F841 - a local the traceback must not show
+        raise ValueError("boom")
+
+    try:
+        fail()
+    except ValueError:
+        get_logger("my.module").exception("something_failed")
+
+    (record,) = _read_json_lines(capsys)
+    assert record["exception"][0]["exc_type"] == "ValueError"  # type: ignore[index]
+    assert "personal value" not in json.dumps(record)
+    assert "locals" not in json.dumps(record)

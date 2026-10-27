@@ -121,6 +121,14 @@ class CollectorService:
         )
         if decision.blocked:
             logger.error("removals_blocked", scan_id=str(scan_id), count=len(decision.blocked))
+        if decision.held_back:
+            # Expected while a region cannot be read in full (ADR 0010); not an error.
+            logger.warning(
+                "removals_held_back",
+                scan_id=str(scan_id),
+                count=len(decision.held_back),
+                regions=sorted(result.incomplete_regions),
+            )
 
         finished_at = self._now()
         try:
@@ -149,6 +157,8 @@ class CollectorService:
             seen=len(result.entity_ids),
             removed=len(decision.removed),
             blocked=len(decision.blocked),
+            held_back=len(decision.held_back),
+            incomplete_regions=sorted(result.incomplete_regions),
         )
 
     def _refresh_detail(self, entity_id: str) -> None:

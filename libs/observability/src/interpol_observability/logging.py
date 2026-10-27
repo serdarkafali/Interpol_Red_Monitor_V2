@@ -5,6 +5,7 @@ import sys
 from typing import Literal
 
 import structlog
+import structlog.tracebacks
 from structlog.typing import EventDict, Processor, WrappedLogger
 
 LogFormat = Literal["json", "console"]
@@ -43,7 +44,13 @@ def configure_logging(
 
     renderer: Processor
     if log_format == "json":
-        shared_processors.append(structlog.processors.dict_tracebacks)
+        # Tracebacks as structured data, but without the values of local variables:
+        # they can hold whatever a function was working on, including personal data.
+        shared_processors.append(
+            structlog.processors.ExceptionRenderer(
+                structlog.tracebacks.ExceptionDictTransformer(show_locals=False)
+            )
+        )
         renderer = structlog.processors.JSONRenderer()
     else:
         renderer = structlog.dev.ConsoleRenderer()
