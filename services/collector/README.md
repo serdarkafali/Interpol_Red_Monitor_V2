@@ -6,8 +6,9 @@ detaylarını çeken, bunları Kafka'ya olay olarak yayınlayan servis (ADR 0005
 ## Ne yapar?
 
 - **Liste taraması** (varsayılan 6 saatte bir): bütün `entity_id`'leri toplar, her biri
-  için `notice.seen`, art arda iki tam taramada görülmeyenler için `notice.removed`
-  gönderir.
+  için `notice.seen`, art arda iki taramada görülmeyenler için `notice.removed`
+  gönderir. Bir bölge (cinsiyet + kararı çıkaran ülke) tam okunamazsa yalnızca o
+  bölgenin kaldırmaları bekletilir (ADR 0010).
 - **Detay çekme** (taramalar arasında sürekli): önce yeni kayıtların, sonra en uzun
   süredir denenmemiş kayıtların detayını ve fotoğraf listesini çeker, `notice.observed`
   gönderir.

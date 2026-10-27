@@ -338,3 +338,54 @@ def test_notice_without_nationality_is_found_through_its_warrant() -> None:
     result = ListScanner(lister, COUNTRIES).scan()
 
     assert ids_of(stateless) <= result.entity_ids
+
+
+# --- regions (ADR 0010) ---------------------------------------------------------------
+
+
+def test_each_id_is_tagged_with_the_most_specific_region_it_was_seen_in() -> None:
+    notices = make_notices(120, nationalities=("TR",)) + make_notices(
+        80, nationalities=("RU",), issuers=("RU", "DE"), first_id=121
+    )
+    lister = FakeLister(notices)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert result.regions["2026/1"] == {"M|TR"}
+    assert result.regions["2026/121"] == {"M|RU", "M|DE"}
+    assert result.incomplete_regions == frozenset()
+
+
+def test_a_small_list_is_tagged_with_the_whole_list_region() -> None:
+    result = ListScanner(FakeLister(make_notices(5)), COUNTRIES).scan()
+
+    assert result.regions["2026/1"] == {"*|*"}
+
+
+def test_a_group_that_cannot_be_covered_reports_its_region() -> None:
+    notices = make_notices(170, nationalities=("RU",), age=40) + make_notices(
+        10, sex="F", first_id=500
+    )
+    lister = FakeLister(notices)
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert not result.complete
+    assert result.incomplete_regions == {"M|RU"}
+
+
+def test_a_failed_query_reports_the_region_it_would_have_read() -> None:
+    notices = make_notices(150, sex="M") + make_notices(100, sex="F", first_id=151)
+    lister = FakeLister(notices, failing=[{"sexId": "F"}])
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert result.incomplete_regions == {"F|*"}
+
+
+def test_a_stopped_or_failed_scan_reports_the_whole_list() -> None:
+    lister = FakeLister(make_notices(10), failing=[{}])
+
+    result = ListScanner(lister, COUNTRIES).scan()
+
+    assert result.incomplete_regions == {"*|*"}

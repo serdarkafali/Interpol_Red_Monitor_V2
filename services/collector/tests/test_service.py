@@ -19,13 +19,20 @@ INVALID_DETAIL_ID = "2026/13"
 TIMING = Timing(list_scan_interval=timedelta(hours=6), detail_refresh=timedelta(hours=12))
 
 
-def scan_of(*entity_ids: str, complete: bool = True) -> ListScanResult:
+def scan_of(
+    *entity_ids: str,
+    complete: bool = True,
+    regions: dict[str, frozenset[str]] | None = None,
+    incomplete: frozenset[str] = frozenset(),
+) -> ListScanResult:
     return ListScanResult(
         entity_ids=frozenset(entity_ids),
-        complete=complete,
+        complete=complete and not incomplete,
         reported_total=len(entity_ids),
         requests=1,
         age_split_requests=0,
+        regions=regions or {},
+        incomplete_regions=incomplete,
     )
 
 
@@ -266,3 +273,22 @@ def test_blocked_removals_are_logged_and_nothing_is_removed(tmp_path: Path) -> N
 
     assert ("notice.removed", "2026/2") not in publisher.types()
     assert any(log["event"] == "removals_blocked" for log in logs)
+
+
+def test_an_incomplete_region_holds_back_only_its_removals(tmp_path: Path) -> None:
+    clock = Clock()
+    regions = {"2026/1": frozenset({"M|RU"}), "2026/2": frozenset({"M|DE"})}
+    held = scan_of("2026/3", regions=regions, incomplete=frozenset({"M|RU"}))
+    scanner = FakeScanner(scan_of("2026/1", "2026/2", "2026/3", regions=regions), held, held)
+    service, publisher, _ = make_service(tmp_path, scanner, clock=clock)
+
+    with capture_logs() as logs:
+        for hours in (0, 6, 12):
+            clock.now = START + timedelta(hours=hours)
+            service.step()
+
+    assert ("notice.removed", "2026/2") in publisher.types()
+    assert ("notice.removed", "2026/1") not in publisher.types()
+    held_back = [log for log in logs if log["event"] == "removals_held_back"]
+    assert held_back
+    assert held_back[-1]["regions"] == ["M|RU"]

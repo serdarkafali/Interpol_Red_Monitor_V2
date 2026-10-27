@@ -12,13 +12,20 @@ from interpol_collector.removal_tracker import (
 )
 
 
-def scan_of(*entity_ids: str, complete: bool = True) -> ListScanResult:
+def scan_of(
+    *entity_ids: str,
+    complete: bool = True,
+    regions: dict[str, frozenset[str]] | None = None,
+    incomplete: frozenset[str] = frozenset(),
+) -> ListScanResult:
     return ListScanResult(
         entity_ids=frozenset(entity_ids),
-        complete=complete,
+        complete=complete and not incomplete,
         reported_total=len(entity_ids),
         requests=1,
         age_split_requests=0,
+        regions=regions or {},
+        incomplete_regions=incomplete,
     )
 
 
@@ -127,6 +134,89 @@ def test_unreadable_state_file_loads_as_none_and_is_logged(tmp_path: Path) -> No
 
 def test_state_file_with_unknown_version_loads_as_none(tmp_path: Path) -> None:
     path = tmp_path / "state.json"
-    path.write_text('{"version": 2, "present": [], "missing_once": []}', encoding="utf-8")
+    path.write_text('{"version": 3, "present": [], "missing_once": []}', encoding="utf-8")
 
     assert StateFile(path).load() is None
+
+
+# --- removals held back by region (ADR 0010) ------------------------------------------
+
+RU_MEN = frozenset({"M|RU"})
+DE_MEN = frozenset({"M|DE"})
+REGIONS = {"2026/1": RU_MEN, "2026/2": DE_MEN, "2026/3": RU_MEN}
+
+
+def regional_state(present: set[str], missing_once: set[str] | None = None) -> RemovalState:
+    return RemovalState(
+        present=frozenset(present),
+        missing_once=frozenset(missing_once or set()),
+        regions={entity_id: REGIONS[entity_id] for entity_id in present},
+    )
+
+
+def test_an_incomplete_region_holds_back_only_its_own_notices() -> None:
+    state = regional_state({"2026/1", "2026/2", "2026/3"}, missing_once={"2026/1", "2026/2"})
+    scan = scan_of("2026/3", regions={"2026/3": RU_MEN}, incomplete=frozenset({"M|RU"}))
+
+    decision = decide_removals(state, scan, max_removed_fraction=1.0)
+
+    assert decision.removed == {"2026/2"}
+    assert decision.held_back == {"2026/1"}
+    # The held-back notice keeps its warning and its region.
+    assert decision.state.missing_once == {"2026/1"}
+    assert decision.state.regions["2026/1"] == RU_MEN
+    assert decision.state.present == {"2026/1", "2026/3"}
+
+
+def test_a_region_that_is_read_again_in_full_resumes_its_removals() -> None:
+    state = regional_state({"2026/1", "2026/3"}, missing_once={"2026/1"})
+
+    scan = scan_of("2026/3", regions={"2026/3": RU_MEN})
+
+    decision = decide_removals(state, scan, max_removed_fraction=1.0)
+
+    assert decision.removed == {"2026/1"}
+
+
+def test_an_incomplete_sex_holds_back_every_issuer_of_that_sex() -> None:
+    state = regional_state({"2026/1", "2026/2"}, missing_once={"2026/1", "2026/2"})
+
+    decision = decide_removals(state, scan_of(incomplete=frozenset({"M|*"})))
+
+    assert decision.removed == frozenset()
+    assert decision.held_back == {"2026/1", "2026/2"}
+
+
+def test_a_notice_with_an_unknown_region_is_held_back_by_any_incomplete_region() -> None:
+    state = RemovalState(present=frozenset({"2026/9"}), missing_once=frozenset({"2026/9"}))
+
+    decision = decide_removals(state, scan_of(incomplete=frozenset({"F|TR"})))
+
+    assert decision.held_back == {"2026/9"}
+
+
+def test_a_scan_that_could_not_read_the_list_changes_nothing() -> None:
+    state = regional_state({"2026/1"}, missing_once={"2026/1"})
+
+    decision = decide_removals(state, scan_of("2026/5", complete=False))
+
+    assert decision.state == state
+    assert decision.removed == frozenset()
+
+
+def test_regions_survive_a_save_and_load(tmp_path: Path) -> None:
+    state = regional_state({"2026/1", "2026/2"}, missing_once={"2026/2"})
+    file = StateFile(tmp_path / "state.json")
+
+    file.save(state)
+
+    assert file.load() == state
+
+
+def test_a_version_1_file_loads_with_unknown_regions(tmp_path: Path) -> None:
+    path = tmp_path / "state.json"
+    path.write_text('{"version": 1, "present": ["2026/1"], "missing_once": []}', "utf-8")
+
+    loaded = StateFile(path).load()
+
+    assert loaded == RemovalState(present=frozenset({"2026/1"}))

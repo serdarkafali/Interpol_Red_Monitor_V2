@@ -11,6 +11,10 @@ Interpol's ``name`` filter matches surnames *containing* the value (measured for
 three letters, ADR 0009), so a notice appears under several values and their totals do
 not add up. A covered group is complete only when the distinct ids found reach the
 group's total: that proves every notice of the group was seen.
+
+Every id is tagged with the *region* it was seen in: its sex and the issuing country of
+the query that returned it, for example ``M|RU``. Groups that could not be read in full
+are reported by region too, so that removals can be held back only there (ADR 0010).
 """
 
 import string
@@ -34,6 +38,9 @@ Filters = Mapping[str, str | int]
 SplitKind = Literal["sex", "issuer", "age", "name"]
 # Longest surname substring tried before a group is given up as incomplete (ADR 0009).
 MAX_SUBSTRING_LENGTH = 4
+# Region of a query without a sex or issuing country filter (ADR 0010).
+ANY = "*"
+WHOLE_LIST = f"{ANY}|{ANY}"
 
 
 class NoticeLister(Protocol):
@@ -52,6 +59,9 @@ class ListScanResult:
     requests: int
     age_split_requests: int
     name_split_requests: int = 0
+    # Regions each id was seen in, and regions that could not be read in full (ADR 0010).
+    regions: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    incomplete_regions: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -59,6 +69,8 @@ class _Progress:
     """Mutable bookkeeping of a scan in progress."""
 
     entity_ids: set[str] = field(default_factory=set)
+    regions: dict[str, set[str]] = field(default_factory=dict)
+    incomplete_regions: set[str] = field(default_factory=set)
     stopped: bool = False
     requests: int = 0
     age_split_requests: int = 0
@@ -77,6 +89,32 @@ class _Split:
     kind: SplitKind
     children: list[dict[str, str | int]]
     check: Literal["sum", "none"]
+
+
+def region_of(filters: Filters) -> str:
+    """Return the region of a query: its sex and issuing country, ``*`` when not set."""
+    return f"{filters.get('sexId', ANY)}|{filters.get('arrestWarrantCountryId', ANY)}"
+
+
+def regions_overlap(first: str, second: str) -> bool:
+    """Return whether a notice in region ``first`` could also be in region ``second``."""
+    return all(
+        ANY in (a, b) or a == b for a, b in zip(first.split("|"), second.split("|"), strict=True)
+    )
+
+
+def _most_specific(regions: set[str]) -> frozenset[str]:
+    """Drop regions that only repeat a more specific one, e.g. ``M|*`` next to ``M|RU``."""
+    return frozenset(
+        region
+        for region in regions
+        if not any(
+            other != region
+            and regions_overlap(other, region)
+            and other.count(ANY) < region.count(ANY)
+            for other in regions
+        )
+    )
 
 
 def iso_country_codes() -> tuple[str, ...]:
@@ -102,16 +140,21 @@ class ListScanner:
         """Collect every visible notice id and decide whether the scan is complete."""
         progress = _Progress()
         root = self._fetch({}, progress)
-        complete = False
-        if root is not None:
-            _, complete = self._collect({}, root, progress)
+        if root is None or progress.stopped:
+            progress.incomplete_regions.add(WHOLE_LIST)
+        else:
+            self._collect({}, root, progress)
+            if progress.stopped:
+                progress.incomplete_regions.add(WHOLE_LIST)
         result = ListScanResult(
             entity_ids=frozenset(progress.entity_ids),
-            complete=complete and not progress.stopped,
+            complete=not progress.incomplete_regions,
             reported_total=root.total if root is not None else 0,
             requests=progress.requests,
             age_split_requests=progress.age_split_requests,
             name_split_requests=progress.name_split_requests,
+            regions={eid: _most_specific(regions) for eid, regions in progress.regions.items()},
+            incomplete_regions=frozenset(progress.incomplete_regions),
         )
         logger.info(
             "list_scan_finished",
@@ -121,6 +164,7 @@ class ListScanner:
             requests=result.requests,
             age_split_requests=result.age_split_requests,
             name_split_requests=result.name_split_requests,
+            incomplete_regions=sorted(result.incomplete_regions),
         )
         return result
 
@@ -132,7 +176,6 @@ class ListScanner:
         Return the ids found in this group and whether every notice of it was seen.
         """
         found = set(page.entity_ids)
-        progress.entity_ids.update(found)
         if page.total <= PAGE_SIZE:
             return found, True
 
@@ -147,6 +190,8 @@ class ListScanner:
             child_page = self._fetch(child, progress, split.kind)
             if child_page is None:
                 children_complete = False
+                if not progress.stopped:
+                    progress.incomplete_regions.add(region_of(child))
                 continue
             children_total += child_page.total
             child_ids, child_complete = self._collect(child, child_page, progress)
@@ -191,11 +236,10 @@ class ListScanner:
                 extended += 1
                 pending.extend(f"{value}{letter}" for letter in LETTERS)
                 pending.extend(f"{letter}{value}" for letter in LETTERS)
-        progress.entity_ids.update(seen)
-
         # Seeing as many distinct ids as the group holds proves it was read in full.
         complete = len(seen) >= page.total and not progress.stopped
         if not complete and not progress.stopped:
+            progress.incomplete_regions.add(region_of(filters))
             logger.error(
                 "list_cover_incomplete",
                 filters=dict(filters),
@@ -237,7 +281,12 @@ class ListScanner:
         elif kind == "name":
             progress.name_split_requests += 1
         try:
-            return self._lister.list_notices(filters)
+            page = self._lister.list_notices(filters)
         except InterpolError:
             logger.warning("list_query_failed", filters=dict(filters), exc_info=True)
             return None
+        region = region_of(filters)
+        progress.entity_ids.update(page.entity_ids)
+        for entity_id in page.entity_ids:
+            progress.regions.setdefault(entity_id, set()).add(region)
+        return page
