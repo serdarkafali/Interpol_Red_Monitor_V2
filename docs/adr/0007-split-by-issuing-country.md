@@ -1,6 +1,6 @@
 # ADR 0007: Liste sorgularını yakalama kararını çıkaran ülkeye göre bölmek
 
-- **Durum:** Kabul edildi
+- **Durum:** Kabul edildi; dördüncü adım (uyruk) ADR 0009 ile soyadı parçalarıyla değişti
 - **Tarih:** 2026-10-25
 - **Karar verenler:** Serdar Kafalı
 - **İlişkili:** ADR 0006'nın "Sorguların bölünmesi" bölümünü değiştirir

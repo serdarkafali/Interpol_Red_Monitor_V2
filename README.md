@@ -29,6 +29,7 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0006](docs/adr/0006-collector-scan-strategy.md) | Collector tarama stratejisi |
 | [0007](docs/adr/0007-split-by-issuing-country.md) | Sorguları yakalama kararını çıkaran ülkeye göre bölmek |
 | [0008](docs/adr/0008-ingestor-design.md) | Ingestor'ın olayları veritabanına yazması |
+| [0009](docs/adr/0009-split-by-name-letters.md) | Bölünemeyen grupları soyadı parçalarıyla kapsamak |
 
 ## Repo yapısı
 
