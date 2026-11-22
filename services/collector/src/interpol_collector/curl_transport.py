@@ -31,7 +31,7 @@ class CurlTransport:
             timeout=self._timeout_seconds,
         )
         try:
-            body = response.json()  # type: ignore[no-untyped-call]
+            body = response.json()
         except ValueError:
             body = None
         return TransportResponse(status_code=response.status_code, body=body)
