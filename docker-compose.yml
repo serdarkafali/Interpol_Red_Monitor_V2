@@ -74,7 +74,7 @@ services:
         $$topics --bootstrap-server kafka:19092 --create --if-not-exists \
           --topic interpol.notices.v1 --partitions 3 --replication-factor 1 \
           --config retention.ms=604800000 --config cleanup.policy=delete
-        for dlq in ingestor.dlq face-worker.dlq; do
+        for dlq in ingestor.dlq; do
           $$topics --bootstrap-server kafka:19092 --create --if-not-exists \
             --topic "$$dlq" --partitions 1 --replication-factor 1 \
             --config retention.ms=604800000
@@ -148,7 +148,46 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  seaweedfs:
+    # S3-compatible object store for the notice photos (ADR 0011). "server -s3" runs
+    # the master, a volume server, the filer and the S3 gateway in one process.
+    image: chrislusf/seaweedfs:4.54
+    command: server -s3 -dir=/data -ip.bind=0.0.0.0
+    environment:
+      # Without these the S3 API accepts any key, even anonymous requests.
+      AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY:?set STORAGE_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_SECRET_KEY:?set STORAGE_SECRET_KEY in .env}
+    ports:
+      - "${STORAGE_PORT:-8333}:8333"
+    volumes:
+      - seaweedfs-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8333/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  storage-init:
+    # Creates the photo bucket once and exits, like kafka-init. Uses the plain S3 API,
+    # so it keeps working if the object store is replaced.
+    image: amazon/aws-cli:2.42.1
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_SECRET_KEY}
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        aws --endpoint-url http://seaweedfs:8333 s3api head-bucket --bucket notice-photos
+        || aws --endpoint-url http://seaweedfs:8333 s3api create-bucket --bucket notice-photos
+    restart: "no"
+
 volumes:
   postgres-data:
   kafka-data:
   collector-state:
+  seaweedfs-data:
