@@ -1,6 +1,7 @@
 # ADR 0004: PostgreSQL veritabanı şeması ve ortak `libs/db` paketi
 
-- **Durum:** Kabul edildi
+- **Durum:** Kabul edildi; fotoğraf deposu MinIO yerine SeaweedFS oldu ve `notice_photos`
+  tablosuna iki sütun eklendi (ADR 0011)
 - **Tarih:** 2026-10-17
 - **Karar verenler:** Serdar Kafalı
 

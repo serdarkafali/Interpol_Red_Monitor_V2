@@ -5,14 +5,17 @@ PostgreSQL'de saklayan ve ileride fotoğraflar üzerinden yüz benzerliği arama
 servislerden oluşan bir sistem.
 
 > **Durum:** Geliştirme aşamasında. Altyapı (Faz 0), veritabanı şeması (Faz 1),
-> collector (Faz 2) ve ingestor (Faz 3) hazır; sırada face-worker ve MinIO (Faz 4) var.
+> collector (Faz 2) ve ingestor (Faz 3) hazır; sırada face-worker ve fotoğraf deposu (Faz 4) var.
 
 ## Mimari
 
 ```text
 Interpol API ──► collector ──► Kafka ──► ingestor ──► PostgreSQL ◄── api
-                                  │
-                                  └────► face-worker ──► MinIO (fotoğraflar)
+                                                          ▲
+                                                          │ indirilecek fotoğraflar
+Interpol API ──► face-worker ─────────────────────────────┘
+                     │
+                     └──► SeaweedFS (fotoğraflar, S3 API)
 
 Tüm servisler ──► stdout (JSON log) ──► Filebeat ──► Logstash ──► Elasticsearch
 ```
@@ -31,6 +34,7 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0008](docs/adr/0008-ingestor-design.md) | Ingestor'ın olayları veritabanına yazması |
 | [0009](docs/adr/0009-split-by-name-letters.md) | Bölünemeyen grupları soyadı parçalarıyla kapsamak |
 | [0010](docs/adr/0010-scoped-removal-hold.md) | Eksik okunan bölgede yalnızca o bölgenin kaldırmalarını durdurmak |
+| [0011](docs/adr/0011-face-worker-photo-download.md) | Face-worker'ın fotoğrafları indirip saklaması |
 
 ## Repo yapısı
 
