@@ -27,7 +27,7 @@ Kararları etkileyen koşullar şunlar:
 - Planlanan nesne deposu MinIO'nun açık kaynak sürümü artık bakımı yapılmayan bir proje:
   Ekim 2025'te community sürümü için Docker imajı ve hazır binary yayınlanması durdu,
   Şubat 2026'da depo arşivlendi ve son sürümü etkileyen güvenlik açıklarına yama çıkmıyor.
-- Fotoğraf indirme isteğinin cevabı (içerik türü, boyut) henüz ölçülmedi.
+- Fotoğraf indirme isteğinin cevabı bir deneme scriptiyle ölçüldü (aşağıda "Ölçüm").
 
 ## Karar
 
@@ -71,8 +71,10 @@ sütunlarını yazar.
 
 1. Fotoğraf seçilir (kısa bir okuma).
 2. Interpol'den indirilir. Bu sırada veritabanında açık bir transaction tutulmaz.
-3. Cevap kontrol edilir: içerik türü `image/` ile başlamalı, boyut en fazla 10 MB olmalı.
-   Uymayan cevap başarısız bir deneme sayılır.
+3. Cevap kontrol edilir: durum kodu 200 olmalı, dosya JPEG imzasıyla (`ff d8 ff`)
+   başlamalı ve en fazla 5 MB olmalı. Uymayan cevap başarısız bir deneme sayılır.
+   Interpol'ün gönderdiği `Content-Type` (`image/JPG`) standart bir değer olmadığı için
+   kontrol başlığa değil dosyanın kendisine bakar; depoya standart `image/jpeg` yazılır.
 4. Dosyanın SHA-256 özeti hesaplanır ve dosya nesne deposuna yazılır.
 5. Satır güncellenir:
    `UPDATE ... SET object_key, sha256, downloaded_at WHERE id = ... AND downloaded_at IS NULL`.
@@ -94,8 +96,9 @@ koda bağlardı. Taşıma katmanı (curl_cffi ile tarayıcı taklidi), yeniden d
 (429 ve 5xx, 20 → 40 sn backoff) ve Protocol ile test edilebilirlik `collector`'dan
 uyarlanır. Üçüncü bir kullanıcı çıkarsa ortak paket yeniden değerlendirilecek.
 
-İlk adımda indirme cevabının içerik türü ve boyutu bir deneme scriptiyle ölçülecek. Script
-yalnızca durum kodunu, içerik türünü ve boyutu yazdırır; fotoğrafın kendisini kaydetmez.
+Fotoğraf `{BASE_URL}/{url_id}/images/{picture_id}` adresinden indirilir. Olmayan bir
+fotoğraf 404 döner; bu da başarısız bir deneme sayılır (fotoğraf listeden çıktıysa satırı
+bir sonraki `notice.observed` ile zaten silinir).
 
 ### İstek hızı ve çalıştırma
 
@@ -148,6 +151,24 @@ durumu.
 
 Hiçbir test ve deneme gerçek Interpol'den fotoğraf indirmez. Gerçek indirmeye geçmek,
 `COLLECTOR_DRY_RUN=false` kararıyla birlikte ayrıca verilecek bir karar.
+
+## Ölçüm
+
+`scripts/probe_interpol_photos.py` (2026-11-23) listenin ilk sayfasındaki 5 kaydın ilk
+fotoğrafını indirdi. Script fotoğrafları kaydetmez ve içeriklerini yazdırmaz; yalnızca
+durum kodu, içerik türü, boyut ve ilk üç bayt yazdırılır.
+
+| Sonuç | Değer |
+| --- | --- |
+| Durum kodu | 5 fotoğrafın hepsi 200 |
+| `Content-Type` | Hepsi `image/JPG` (standart değer `image/jpeg`) |
+| Dosya imzası | Hepsi `ff d8 ff` (JPEG) |
+| Boyut | 6 897 – 76 297 bayt |
+| Olmayan fotoğraf (`picture_id=0`) | 404, `application/json` gövde (103 bayt) |
+
+5 MB sınırı görülen en büyük dosyanın yaklaşık 65 katı; gerçek fotoğrafları reddetmeden
+yanlışlıkla gelen büyük bir cevabı durduruyor. Örneklem küçük; ilk dolumda reddedilen
+fotoğraflar loglardan izlenecek.
 
 ## Değerlendirilen alternatifler
 
