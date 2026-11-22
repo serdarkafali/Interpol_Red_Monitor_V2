@@ -102,7 +102,9 @@ CI her pull request'te aynı komutları çalıştırır:
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy
-uv run pytest                      # veritabanı testleri için Docker açık olmalı
+uv run python scripts/check_dependencies.py   # her paket import ettiğini tanımlamış mı
+uv run lint-imports                           # mimari kurallar (pyproject.toml)
+uv run pytest                                 # veritabanı testleri için Docker açık olmalı
 ```
 
 ## Katkı kuralları

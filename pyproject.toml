@@ -11,6 +11,8 @@ members = ["libs/*", "services/*"]
 [dependency-groups]
 dev = [
     "curl-cffi>=0.16.3",
+    "deptry>=0.25.1",
+    "import-linter>=2.17",
     "mypy>=2.4.0",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
@@ -33,6 +35,57 @@ python_version = "3.12"
 strict = true
 files = ["libs/*/src", "libs/*/tests", "services/*/src", "services/*/tests"]
 plugins = ["pydantic.mypy"]
+
+[tool.importlinter]
+root_packages = [
+    "interpol_contracts",
+    "interpol_db",
+    "interpol_observability",
+    "interpol_collector",
+    "interpol_ingestor",
+]
+
+[[tool.importlinter.contracts]]
+name = "Services do not import each other; they talk through Kafka (ADR 0002)"
+type = "independence"
+modules = ["interpol_collector", "interpol_ingestor"]
+
+[[tool.importlinter.contracts]]
+name = "Libraries do not import services"
+type = "forbidden"
+source_modules = ["interpol_contracts", "interpol_db", "interpol_observability"]
+forbidden_modules = ["interpol_collector", "interpol_ingestor"]
+
+[[tool.importlinter.contracts]]
+name = "Libraries do not import each other"
+type = "independence"
+modules = ["interpol_contracts", "interpol_db", "interpol_observability"]
+
+[[tool.importlinter.contracts]]
+name = "The collector does not touch the database (ADR 0004)"
+type = "forbidden"
+source_modules = ["interpol_collector"]
+forbidden_modules = ["interpol_db"]
+
+# Higher layers may import lower ones, never the other way round. Modules on one line
+# separated by "|" must not import each other. __init__ (main) and config are left out:
+# main wires every module together.
+[[tool.importlinter.contracts]]
+name = "Collector layers"
+type = "layers"
+containers = ["interpol_collector"]
+layers = [
+    "service",
+    "removal_tracker | detail_schedule | events | publishers",
+    "list_scanner | curl_transport",
+    "interpol_client | state_io",
+]
+
+[[tool.importlinter.contracts]]
+name = "Ingestor layers"
+type = "layers"
+containers = ["interpol_ingestor"]
+layers = ["service", "dead_letters", "handler", "repository", "normalize"]
 
 [tool.pytest.ini_options]
 testpaths = ["libs", "services"]

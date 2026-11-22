@@ -17,3 +17,11 @@ dependencies = [
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
+
+[tool.deptry]
+# The package's own module; deptry cannot detect it in the src layout.
+known_first_party = ["interpol_db"]
+
+[tool.deptry.per_rule_ignores]
+# Never imported: SQLAlchemy loads the driver named in the URL ("postgresql+psycopg://").
+DEP002 = ["psycopg"]
