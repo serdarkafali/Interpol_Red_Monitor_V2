@@ -43,18 +43,19 @@ root_packages = [
     "interpol_observability",
     "interpol_collector",
     "interpol_ingestor",
+    "interpol_face_worker",
 ]
 
 [[tool.importlinter.contracts]]
-name = "Services do not import each other; they talk through Kafka (ADR 0002)"
+name = "Services do not import each other"
 type = "independence"
-modules = ["interpol_collector", "interpol_ingestor"]
+modules = ["interpol_collector", "interpol_ingestor", "interpol_face_worker"]
 
 [[tool.importlinter.contracts]]
 name = "Libraries do not import services"
 type = "forbidden"
 source_modules = ["interpol_contracts", "interpol_db", "interpol_observability"]
-forbidden_modules = ["interpol_collector", "interpol_ingestor"]
+forbidden_modules = ["interpol_collector", "interpol_ingestor", "interpol_face_worker"]
 
 [[tool.importlinter.contracts]]
 name = "Libraries do not import each other"

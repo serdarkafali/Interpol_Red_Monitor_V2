@@ -1,0 +1,21 @@
+[project]
+name = "interpol-face-worker"
+version = "0.1.0"
+description = "Interpol fotoğraflarını indirip nesne deposuna yazan servis"
+readme = "README.md"
+authors = [
+    { name = "Serdar", email = "serdarkfl8@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+interpol-face-worker = "interpol_face_worker:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.deptry]
+# The package's own module; deptry cannot detect it in the src layout.
+known_first_party = ["interpol_face_worker"]
