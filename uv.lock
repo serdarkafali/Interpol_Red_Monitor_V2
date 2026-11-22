@@ -11,6 +11,7 @@ members = [
     "interpol-collector",
     "interpol-contracts",
     "interpol-db",
+    "interpol-face-worker",
     "interpol-ingestor",
     "interpol-monitor",
     "interpol-observability",
@@ -675,6 +676,11 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.15.0" },
     { name = "sqlalchemy", specifier = ">=2.1.5" },
 ]
+
+[[package]]
+name = "interpol-face-worker"
+version = "0.1.0"
+source = { editable = "services/face-worker" }
 
 [[package]]
 name = "interpol-ingestor"
