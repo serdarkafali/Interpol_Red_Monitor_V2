@@ -13,6 +13,7 @@ dependencies = [
     "interpol-contracts",
     "interpol-observability",
     "pycountry>=26.2.16",
+    "pydantic>=2.14.1",
     "pydantic-settings>=2.15.0",
 ]
 
@@ -26,3 +27,7 @@ build-backend = "uv_build"
 [tool.uv.sources]
 interpol-contracts = { workspace = true }
 interpol-observability = { workspace = true }
+
+[tool.deptry]
+# The package's own module; deptry cannot detect it in the src layout.
+known_first_party = ["interpol_collector"]

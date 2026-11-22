@@ -33,3 +33,15 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+      - id: deptry
+        name: deptry (every package declares what it imports)
+        entry: uv run python scripts/check_dependencies.py
+        language: system
+        files: (\.py|pyproject\.toml)$
+        pass_filenames: false
+      - id: import-linter
+        name: import-linter (architecture rules in pyproject.toml)
+        entry: uv run lint-imports
+        language: system
+        files: (\.py|pyproject\.toml)$
+        pass_filenames: false

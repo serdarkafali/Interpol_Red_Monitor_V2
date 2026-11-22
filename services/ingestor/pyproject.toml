@@ -12,6 +12,7 @@ dependencies = [
     "interpol-contracts",
     "interpol-db",
     "interpol-observability",
+    "pydantic>=2.14.1",
     "pydantic-settings>=2.15.0",
     "sqlalchemy>=2.1.5",
 ]
@@ -27,3 +28,7 @@ build-backend = "uv_build"
 interpol-contracts = { workspace = true }
 interpol-db = { workspace = true }
 interpol-observability = { workspace = true }
+
+[tool.deptry]
+# The package's own module; deptry cannot detect it in the src layout.
+known_first_party = ["interpol_ingestor"]
