@@ -5,7 +5,8 @@ PostgreSQL'de saklayan ve ileride fotoğraflar üzerinden yüz benzerliği arama
 servislerden oluşan bir sistem.
 
 > **Durum:** Geliştirme aşamasında. Altyapı (Faz 0), veritabanı şeması (Faz 1),
-> collector (Faz 2) ve ingestor (Faz 3) hazır; sırada face-worker ve fotoğraf deposu (Faz 4) var.
+> collector (Faz 2), ingestor (Faz 3) ve fotoğrafları indiren face-worker (Faz 4) hazır;
+> sırada yüz benzerliği (Faz 5) var.
 
 ## Mimari
 
@@ -46,7 +47,8 @@ libs/
 services/
   collector/       Interpol API'sinden kayıtları toplayan servis
   ingestor/        Kafka'daki olayları PostgreSQL'e yazan servis
-scripts/           Tek seferlik araçlar (API örnekleme ve analiz)
+  face-worker/     Fotoğrafları indirip nesne deposuna (SeaweedFS) yazan servis
+scripts/           Tek seferlik araçlar (API ölçümleri, uydurma olaylar, sahte Interpol)
 docs/adr/          Mimari karar kayıtları
 ```
 
@@ -69,7 +71,7 @@ uv sync --all-packages             # sanal ortam ve tüm bağımlılıklar
 uv run pre-commit install          # commit öncesi kontroller
 
 Copy-Item .env.example .env        # sonra .env içindeki şifreleri değiştirin
-docker compose up -d --build       # PostgreSQL 18 + pgvector, Kafka, migrate, ingestor
+docker compose up -d --build       # PostgreSQL, Kafka, SeaweedFS, migrate, ingestor
 ```
 
 `docker compose up` migration'ları ayrı bir `migrate` adımında uygular. Docker dışında
@@ -97,6 +99,17 @@ docker compose logs ingestor
 ```
 
 Ayrıntılar: [`services/ingestor/README.md`](services/ingestor/README.md).
+
+Face-worker gerçek Interpol API'sine istek attığı için düz `docker compose up` ile
+başlamaz. Gerçek bir fotoğraf indirmeden uçtan uca denemek için sahte bir Interpol
+sunucusuyla başlatılır (uydurma olaylar yazıldıktan sonra):
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile face-worker up -d --build face-worker
+docker compose logs face-worker
+```
+
+Ayrıntılar: [`services/face-worker/README.md`](services/face-worker/README.md).
 
 ## Kontroller
 

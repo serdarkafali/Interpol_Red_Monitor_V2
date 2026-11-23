@@ -85,3 +85,24 @@ def test_tracebacks_never_contain_local_variables(capsys: pytest.CaptureFixture[
     assert record["exception"][0]["exc_type"] == "ValueError"  # type: ignore[index]
     assert "personal value" not in json.dumps(record)
     assert "locals" not in json.dumps(record)
+
+
+def test_console_tracebacks_never_contain_local_variables(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    configure_logging(service_name="test-service", log_format="console")
+
+    def fail() -> None:
+        # Built at runtime: the console traceback prints source lines, so a literal value
+        # would appear in them even when locals are hidden.
+        secret = "-".join(["personal", "value"])  # noqa: F841 - a local it must not show
+        raise ValueError("boom")
+
+    try:
+        fail()
+    except ValueError:
+        get_logger("my.module").exception("something_failed")
+
+    output = capsys.readouterr().out
+    assert "ValueError" in output
+    assert "personal-value" not in output

@@ -42,10 +42,10 @@ def configure_logging(
         _add_service_name(service_name),
     ]
 
+    # Tracebacks never show the values of local variables, in either format: they can hold
+    # whatever a function was working on, including personal data.
     renderer: Processor
     if log_format == "json":
-        # Tracebacks as structured data, but without the values of local variables:
-        # they can hold whatever a function was working on, including personal data.
         shared_processors.append(
             structlog.processors.ExceptionRenderer(
                 structlog.tracebacks.ExceptionDictTransformer(show_locals=False)
@@ -53,7 +53,9 @@ def configure_logging(
         )
         renderer = structlog.processors.JSONRenderer()
     else:
-        renderer = structlog.dev.ConsoleRenderer()
+        renderer = structlog.dev.ConsoleRenderer(
+            exception_formatter=structlog.dev.RichTracebackFormatter(show_locals=False)
+        )
 
     structlog.configure(
         processors=[*shared_processors, structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
