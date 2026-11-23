@@ -12,13 +12,14 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import Connection, Engine, create_engine, delete, insert, select
+from sqlalchemy import Connection, Engine, create_engine, delete, insert, select, text
 from testcontainers.community.postgres import PostgresContainer
 
 from interpol_db import Notice, NoticePhoto
 from interpol_face_worker.repository import (
     MAX_DOWNLOAD_ATTEMPTS,
     PendingPhoto,
+    PhotoRepository,
     next_pending_photo,
     record_download,
     record_failure,
@@ -215,3 +216,20 @@ def test_stored_object_keys_lists_only_downloaded_photos(connection: Connection)
     add_photo(connection, notice_id, "222")
 
     assert stored_object_keys(connection) == {"notices/x/111"}
+
+
+def test_photo_repository_commits_each_call(engine: Engine) -> None:
+    """The service's view: every call runs and commits in its own transaction."""
+    repository = PhotoRepository(engine.begin)
+    try:
+        with engine.begin() as connection:
+            photo_id = add_photo(connection, add_notice(connection, "1900/1"), "111")
+
+        assert repository.next_pending_photo(NOW) is not None
+        repository.record_failure(photo_id, NOW - timedelta(hours=2))
+        assert repository.record_download(photo_id, "notices/1900-1/111", "f00d", NOW) is True
+        assert repository.next_pending_photo(NOW) is None
+        assert repository.stored_object_keys() == {"notices/1900-1/111"}
+    finally:
+        with engine.begin() as connection:
+            connection.execute(text("TRUNCATE notices CASCADE"))

@@ -89,6 +89,16 @@ type = "layers"
 containers = ["interpol_ingestor"]
 layers = ["service", "dead_letters", "handler", "repository", "normalize"]
 
+[[tool.importlinter.contracts]]
+name = "Face worker layers"
+type = "layers"
+containers = ["interpol_face_worker"]
+layers = [
+    "service",
+    "repository | photo_store | curl_transport",
+    "interpol_photos",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["libs", "services"]
 addopts = ["--import-mode=importlib"]
