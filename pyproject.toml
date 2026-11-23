@@ -19,6 +19,7 @@ dev = [
     "ruff>=0.17.0",
     "structlog>=26.1.0",
     "testcontainers[postgres]>=4.15.0",
+    "types-boto3[s3]>=1.44.9",
 ]
 [tool.ruff]
 line-length = 100
