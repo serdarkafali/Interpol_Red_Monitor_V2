@@ -152,7 +152,11 @@ services:
     # S3-compatible object store for the notice photos (ADR 0011). "server -s3" runs
     # the master, a volume server, the filer and the S3 gateway in one process.
     image: chrislusf/seaweedfs:4.54
-    command: server -s3 -dir=/data -ip.bind=0.0.0.0
+    # -volume.max=0: as many volumes as the disk allows (the default of 8 is used up by
+    # the first bucket). -master.volumeSizeLimitMB: small volumes suit small photos.
+    command: >-
+      server -s3 -dir=/data -ip.bind=0.0.0.0
+      -volume.max=0 -master.volumeSizeLimitMB=1024
     environment:
       # Without these the S3 API accepts any key, even anonymous requests.
       AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY:?set STORAGE_ACCESS_KEY in .env}

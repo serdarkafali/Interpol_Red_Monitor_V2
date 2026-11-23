@@ -124,6 +124,9 @@ ile çalışıyor. Kod depoyla yalnızca standart S3 API üzerinden konuşur (Py
 - Erişim bilgileri `.env`'de durur, repoya girmez. `face-worker` şimdilik tek bir erişim
   anahtarı kullanır; yalnızca bu bucket'a yetkili ayrı bir kullanıcı Faz 8'e kalıyor.
 - Veriler bir Docker volume'da kalıcı tutulur; imaj sürümü sabitlenir.
+- SeaweedFS her bucket için ayrı volume'lar açıyor; varsayılan en fazla 8 volume ilk
+  bucket'la doluyor ve ikinci bir bucket'a yazılamıyor (testlerde görüldü). Bu yüzden
+  volume sayısı diskin elverdiği kadar (`-volume.max=0`), volume boyutu 1 GB.
 
 ### Object key
 
