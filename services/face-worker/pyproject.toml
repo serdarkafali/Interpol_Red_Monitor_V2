@@ -7,7 +7,10 @@ authors = [
     { name = "Serdar", email = "serdarkfl8@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "curl-cffi>=0.17.0",
+    "interpol-observability",
+]
 
 [project.scripts]
 interpol-face-worker = "interpol_face_worker:main"
@@ -19,3 +22,6 @@ build-backend = "uv_build"
 [tool.deptry]
 # The package's own module; deptry cannot detect it in the src layout.
 known_first_party = ["interpol_face_worker"]
+
+[tool.uv.sources]
+interpol-observability = { workspace = true }

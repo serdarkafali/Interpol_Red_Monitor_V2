@@ -681,6 +681,16 @@ requires-dist = [
 name = "interpol-face-worker"
 version = "0.1.0"
 source = { editable = "services/face-worker" }
+dependencies = [
+    { name = "curl-cffi" },
+    { name = "interpol-observability" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "curl-cffi", specifier = ">=0.17.0" },
+    { name = "interpol-observability", editable = "libs/observability" },
+]
 
 [[package]]
 name = "interpol-ingestor"
