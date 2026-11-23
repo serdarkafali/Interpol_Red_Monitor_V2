@@ -724,6 +724,8 @@ dependencies = [
     { name = "curl-cffi" },
     { name = "interpol-db" },
     { name = "interpol-observability" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "sqlalchemy" },
 ]
 
@@ -734,6 +736,8 @@ requires-dist = [
     { name = "curl-cffi", specifier = ">=0.17.0" },
     { name = "interpol-db", editable = "libs/db" },
     { name = "interpol-observability", editable = "libs/observability" },
+    { name = "pydantic", specifier = ">=2.14.4" },
+    { name = "pydantic-settings", specifier = ">=2.16.3" },
     { name = "sqlalchemy", specifier = ">=2.1.9" },
 ]
 
