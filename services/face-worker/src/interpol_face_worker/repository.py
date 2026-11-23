@@ -6,12 +6,17 @@ The face worker writes only the download columns; rows are added and deleted by 
 ingestor.
 """
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import Connection, Integer, cast, func, literal, or_, select, update
 
 from interpol_db import Notice, NoticePhoto
+
+# A function that opens a transaction and yields its connection, e.g. ``engine.begin``.
+Transaction = Callable[[], AbstractContextManager[Connection]]
 
 # After this many failed downloads a photo is not tried again (ADR 0011).
 MAX_DOWNLOAD_ATTEMPTS = 5
@@ -102,3 +107,30 @@ def stored_object_keys(connection: Connection) -> set[str]:
         select(NoticePhoto.object_key).where(NoticePhoto.object_key.is_not(None))
     ).scalars()
     return {key for key in keys if key is not None}
+
+
+class PhotoRepository:
+    """The functions above, each run in its own short transaction.
+
+    The service holds no transaction while a photo is downloaded (ADR 0011), so every
+    call commits on its own.
+    """
+
+    def __init__(self, transaction: Transaction) -> None:
+        self._transaction = transaction
+
+    def next_pending_photo(self, now: datetime) -> PendingPhoto | None:
+        with self._transaction() as connection:
+            return next_pending_photo(connection, now)
+
+    def record_download(self, photo_id: int, object_key: str, sha256: str, now: datetime) -> bool:
+        with self._transaction() as connection:
+            return record_download(connection, photo_id, object_key, sha256, now)
+
+    def record_failure(self, photo_id: int, now: datetime) -> None:
+        with self._transaction() as connection:
+            record_failure(connection, photo_id, now)
+
+    def stored_object_keys(self) -> set[str]:
+        with self._transaction() as connection:
+            return stored_object_keys(connection)
