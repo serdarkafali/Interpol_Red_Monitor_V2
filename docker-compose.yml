@@ -148,6 +148,35 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  face-worker:
+    # Downloads notice photos into the object store (ADR 0011). Behind a profile because
+    # it calls the real Interpol API: a plain "docker compose up" never starts it.
+    profiles: ["face-worker"]
+    build:
+      context: .
+      dockerfile: services/face-worker/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+    environment:
+      FACE_WORKER_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      FACE_WORKER_STORAGE_ENDPOINT_URL: http://seaweedfs:8333
+      FACE_WORKER_STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      FACE_WORKER_STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      FACE_WORKER_INTERPOL_BASE_URL: ${FACE_WORKER_INTERPOL_BASE_URL:-https://ws-public.interpol.int/notices/v1/red}
+      FACE_WORKER_LOG_LEVEL: ${FACE_WORKER_LOG_LEVEL:-INFO}
+      FACE_WORKER_LOG_FORMAT: json
+    # A download with all its retries takes up to about two minutes.
+    stop_grace_period: 120s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   seaweedfs:
     # S3-compatible object store for the notice photos (ADR 0011). "server -s3" runs
     # the master, a volume server, the filer and the S3 gateway in one process.

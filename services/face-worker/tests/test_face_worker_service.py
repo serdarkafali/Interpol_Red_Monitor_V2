@@ -199,6 +199,7 @@ def test_an_unreachable_store_counts_no_attempt_and_waits(clock: Clock) -> None:
     assert queue.downloads == []
     assert sleeps == [60.0]
     assert logs[-1]["event"] == "dependency_unavailable"
+    assert logs[-1]["error"] == "EndpointConnectionError"
 
 
 def test_cleanup_deletes_only_old_files_the_database_does_not_know(clock: Clock) -> None:

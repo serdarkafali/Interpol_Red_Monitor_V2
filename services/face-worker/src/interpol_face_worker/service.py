@@ -101,8 +101,9 @@ class FaceWorkerService:
                 self._sleep(self._idle_seconds)
                 return
             self._process(photo)
-        except UNAVAILABLE_ERRORS:
-            logger.warning("dependency_unavailable", exc_info=True)
+        except UNAVAILABLE_ERRORS as exc:
+            # Only the error class: this repeats every idle wait while the outage lasts.
+            logger.warning("dependency_unavailable", error=type(exc).__name__)
             self._sleep(self._idle_seconds)
 
     def _cleanup_due(self) -> bool:
