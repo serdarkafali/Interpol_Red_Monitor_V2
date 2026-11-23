@@ -722,7 +722,9 @@ dependencies = [
     { name = "boto3" },
     { name = "botocore" },
     { name = "curl-cffi" },
+    { name = "interpol-db" },
     { name = "interpol-observability" },
+    { name = "sqlalchemy" },
 ]
 
 [package.metadata]
@@ -730,7 +732,9 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.44.9" },
     { name = "botocore", specifier = ">=1.44.9" },
     { name = "curl-cffi", specifier = ">=0.17.0" },
+    { name = "interpol-db", editable = "libs/db" },
     { name = "interpol-observability", editable = "libs/observability" },
+    { name = "sqlalchemy", specifier = ">=2.1.9" },
 ]
 
 [[package]]

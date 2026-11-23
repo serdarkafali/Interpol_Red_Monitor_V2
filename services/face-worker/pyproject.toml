@@ -11,7 +11,9 @@ dependencies = [
     "boto3>=1.44.9",
     "botocore>=1.44.9",
     "curl-cffi>=0.17.0",
+    "interpol-db",
     "interpol-observability",
+    "sqlalchemy>=2.1.9",
 ]
 
 [project.scripts]
@@ -27,3 +29,4 @@ known_first_party = ["interpol_face_worker"]
 
 [tool.uv.sources]
 interpol-observability = { workspace = true }
+interpol-db = { workspace = true }
