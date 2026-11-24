@@ -36,6 +36,7 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0009](docs/adr/0009-split-by-name-letters.md) | Bölünemeyen grupları soyadı parçalarıyla kapsamak |
 | [0010](docs/adr/0010-scoped-removal-hold.md) | Eksik okunan bölgede yalnızca o bölgenin kaldırmalarını durdurmak |
 | [0011](docs/adr/0011-face-worker-photo-download.md) | Face-worker'ın fotoğrafları indirip saklaması |
+| [0012](docs/adr/0012-face-embeddings.md) | Yüzleri bulmak, vektöre çevirmek ve benzerlerini aramak |
 
 ## Repo yapısı
 
