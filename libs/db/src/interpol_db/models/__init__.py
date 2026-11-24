@@ -6,7 +6,8 @@ Every model must be imported here: Alembic only sees the tables registered on
 
 from interpol_db.models.arrest_warrant import ArrestWarrant
 from interpol_db.models.country import Country
+from interpol_db.models.face import Face
 from interpol_db.models.notice import Notice, notice_nationalities
 from interpol_db.models.notice_photo import NoticePhoto
 
-__all__ = ["ArrestWarrant", "Country", "Notice", "NoticePhoto", "notice_nationalities"]
+__all__ = ["ArrestWarrant", "Country", "Face", "Notice", "NoticePhoto", "notice_nationalities"]

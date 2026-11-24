@@ -8,16 +8,20 @@ from interpol_db.base import NAMING_CONVENTION, Base
 from interpol_db.models import (
     ArrestWarrant,
     Country,
+    Face,
     Notice,
     NoticePhoto,
     notice_nationalities,
 )
+from interpol_db.models.face import EMBEDDING_DIMENSIONS
 
 __all__ = [
+    "EMBEDDING_DIMENSIONS",
     "NAMING_CONVENTION",
     "ArrestWarrant",
     "Base",
     "Country",
+    "Face",
     "Notice",
     "NoticePhoto",
     "notice_nationalities",
