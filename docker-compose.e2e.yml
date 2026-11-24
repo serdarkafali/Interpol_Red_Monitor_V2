@@ -1,0 +1,21 @@
+# End-to-end run of the face worker without touching Interpol (ADR 0011).
+#
+# Adds a fake Interpol photo server and points the face worker at it. Used together with
+# the main file:
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile face-worker up -d --build face-worker
+# The fake server serves one made-up grey JPEG; see scripts/fake_interpol_photos.py.
+
+services:
+  fake-interpol:
+    image: python:3.12-slim
+    command: ["python", "/app/fake_interpol_photos.py"]
+    volumes:
+      - ./scripts/fake_interpol_photos.py:/app/fake_interpol_photos.py:ro
+    restart: "no"
+
+  face-worker:
+    depends_on:
+      fake-interpol:
+        condition: service_started
+    environment:
+      FACE_WORKER_INTERPOL_BASE_URL: http://fake-interpol:8080/notices/v1/red

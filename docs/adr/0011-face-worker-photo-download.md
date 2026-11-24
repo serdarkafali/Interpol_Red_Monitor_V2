@@ -173,6 +173,32 @@ durum kodu, içerik türü, boyut ve ilk üç bayt yazdırılır.
 yanlışlıkla gelen büyük bir cevabı durduruyor. Örneklem küçük; ilk dolumda reddedilen
 fotoğraflar loglardan izlenecek.
 
+## Doğrulama
+
+Uçtan uca deneme (2026-11-23, Serdar'ın makinesinde, Docker). `scripts/produce_fake_events.py`
+uydurma olayları yazdı, ingestor `notice_photos` satırlarını oluşturdu ve face-worker
+`docker-compose.e2e.yml` ile sahte Interpol sunucusuna yönlendirildi. Gerçek Interpol'e
+istek atılmadı.
+
+| Kayıt | Beklenen | Sonuç |
+| --- | --- | --- |
+| Açılış | Sahipsiz dosya temizliği | `orphan_photos_deleted`, `count: 0` |
+| `1900/1` | Depoya yazılır | `photo_stored`; depoda `notices/1900-1/1900-1-photo` (630 bayt) |
+| `1900/2` | Sahte sunucu HTML döndürür | `photo_download_failed`, `reason: not_jpeg`, `attempts: 1` |
+| `1900/6` | Sahte sunucu 404 döndürür | `photo_download_failed`, `reason: not_found`, `attempts: 1` |
+| `1900/3` | Kaldırılmış kayıt, denenmez | Log yok |
+| `1900/5` | DLQ'ya gitmişti, satırı yok | Log yok |
+
+İstekler arasında 6–7 sn geçti (5–8 sn nezaket gecikmesi). Daha önce Claude'un ortamında
+yerel PostgreSQL ve SeaweedFS ile yapılan denemede ayrıca şunlar görüldü: depo kapalıyken
+servis çökmeden her bekleme süresinde tek satırlık `dependency_unavailable` yazdı; 10
+dakikalık sahipsiz bir dosya 1 saat kuralı nedeniyle silinmedi; SIGTERM'de servis o anki
+adımı bitirip `face_worker_stopped` ile kapandı.
+
+Bu fazda ayrıca `console` log formatında hata çıktılarının yerel değişkenleri gösterdiği
+fark edildi (Faz 3'teki düzeltme yalnızca `json` formatını kapsıyordu); `libs/observability`
+iki formatta da yerel değişkenleri gizleyecek şekilde düzeltildi.
+
 ## Değerlendirilen alternatifler
 
 **ADR 0005'teki gibi Kafka'yı okumak.** Olay geldiği anda indirme başlardı. Ancak satır
