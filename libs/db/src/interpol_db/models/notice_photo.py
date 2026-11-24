@@ -11,6 +11,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from interpol_db.base import Base
 
 if TYPE_CHECKING:
+    from interpol_db.models.face import Face
     from interpol_db.models.notice import Notice
 
 
@@ -21,6 +22,12 @@ class NoticePhoto(Base):
     __table_args__ = (
         # Used by the face worker to pick the next photo that is not downloaded yet.
         Index(None, "last_attempt_at", postgresql_where=text("downloaded_at IS NULL")),
+        # Used by the face worker to pick the next downloaded photo without face analysis.
+        Index(
+            None,
+            "id",
+            postgresql_where=text("downloaded_at IS NOT NULL AND faces_processed_at IS NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
@@ -34,5 +41,10 @@ class NoticePhoto(Base):
     downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     download_attempts: Mapped[int] = mapped_column(SmallInteger, server_default="0")
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Set by the face worker once face analysis has run, even if no face was found.
+    faces_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     notice: Mapped[Notice] = relationship(back_populates="photos")
+    faces: Mapped[list[Face]] = relationship(
+        back_populates="photo", cascade="all, delete-orphan", passive_deletes=True
+    )
