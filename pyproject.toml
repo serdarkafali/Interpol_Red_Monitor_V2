@@ -99,7 +99,7 @@ containers = ["interpol_face_worker"]
 layers = [
     "service",
     "repository | photo_store | curl_transport",
-    "interpol_photos",
+    "interpol_photos | face_analysis",
 ]
 
 [tool.pytest.ini_options]
