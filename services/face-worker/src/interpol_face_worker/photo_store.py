@@ -38,7 +38,7 @@ class StoredObject:
 
 
 class S3PhotoStore:
-    """Writes, lists and deletes photos in one bucket."""
+    """Writes, reads, lists and deletes photos in one bucket."""
 
     def __init__(self, client: S3Client, bucket: str) -> None:
         self._client = client
@@ -78,3 +78,12 @@ class S3PhotoStore:
     def delete(self, key: str) -> None:
         """Delete one photo; deleting a key that does not exist is not an error."""
         self._client.delete_object(Bucket=self._bucket, Key=key)
+
+    def get(self, key: str) -> bytes:
+        """Read one photo and return its bytes.
+
+        A missing key raises botocore's ClientError with the code ``NoSuchKey``.
+        """
+        response = self._client.get_object(Bucket=self._bucket, Key=key)
+        # Body is a stream from the store; read() downloads the whole file (at most 5 MB).
+        return response["Body"].read()

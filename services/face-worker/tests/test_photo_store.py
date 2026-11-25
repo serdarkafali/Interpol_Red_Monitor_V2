@@ -135,6 +135,19 @@ def test_delete_removes_the_file_and_a_missing_key_is_not_an_error(
     assert list(store.list_objects()) == []
 
 
+def test_get_returns_the_bytes_that_were_put(store: S3PhotoStore) -> None:
+    store.put("notices/2026-7/111", FAKE_JPEG)
+
+    assert store.get("notices/2026-7/111") == FAKE_JPEG
+
+
+def test_get_of_a_missing_key_raises_no_such_key(store: S3PhotoStore) -> None:
+    with pytest.raises(ClientError) as error:
+        store.get("notices/2026-7/missing")
+
+    assert error.value.response["Error"]["Code"] == "NoSuchKey"
+
+
 def test_wrong_credentials_are_refused(endpoint_url: str, bucket: str) -> None:
     intruder = S3PhotoStore.connect(endpoint_url, "wrong", "key", bucket)
 
