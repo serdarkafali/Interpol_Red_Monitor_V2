@@ -203,5 +203,11 @@ kişi ya da gerçek Interpol verisi kullanılmadı.
 
 `face_matches`'te dört satır oluştu: iki kayıt içi (0,419 ve 0,884) ve iki kayıtlar arası
 (0,366 ve 0,378). Bir fotoğrafın `faces_processed_at`'i sıfırlanınca yeniden işlendi;
-eski yüz satırı yenisiyle değişti ve eşleşmesi yeniden yazıldı. Docker imajıyla aynı
-denemeyi Serdar kendi makinesinde yapacak.
+eski yüz satırı yenisiyle değişti ve eşleşmesi yeniden yazıldı.
+
+Aynı deneme Docker ile Serdar'ın makinesinde tekrarlandı (2026-11-25): Kafka, ingestor,
+`scripts/produce_fake_events.py` ve imajın içindeki modellerle. `face_matches`'te aynı dört
+çift aynı uzaklıklarla oluştu (kayıt içi 0,419 ve 0,884; kayıtlar arası 0,366 ve 0,378).
+Bu deneme, birim testlerinin göremediği bir hatayı yakaladı: `ADD` ile indirilen model
+dosyaları ve klasörleri yetkisiz servis kullanıcısı tarafından okunamıyordu; Dockerfile'da
+klasör önceden oluşturulup dosyalara `--chmod=644` verildi.
