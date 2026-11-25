@@ -5,16 +5,23 @@ names every test module by its file name, and the collector already has a test_s
 """
 
 import hashlib
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ClientError, EndpointConnectionError
 from structlog.testing import capture_logs
 
+from interpol_face_worker.face_analysis import DetectedFace, FaceAnalysisError
 from interpol_face_worker.interpol_photos import JPEG_SIGNATURE, PhotoDownloadError
 from interpol_face_worker.photo_store import StoredObject
-from interpol_face_worker.repository import MAX_DOWNLOAD_ATTEMPTS, PendingPhoto
+from interpol_face_worker.repository import (
+    MAX_DOWNLOAD_ATTEMPTS,
+    FaceMatches,
+    PendingPhoto,
+    PhotoForFaces,
+    SimilarFace,
+)
 from interpol_face_worker.service import FaceWorkerService
 
 START = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
@@ -34,6 +41,10 @@ class FakeQueue:
 
     def __init__(self, *pending: PendingPhoto) -> None:
         self.pending = list(pending)
+        # Downloaded photos waiting for face analysis, and what record_faces answers.
+        self.for_faces: list[PhotoForFaces] = []
+        self.matches: list[FaceMatches] = []
+        self.recorded_faces: list[tuple[int, list[DetectedFace]]] = []
         self.downloads: list[tuple[int, str, str]] = []
         self.failures: list[int] = []
         self.keys: set[str] = set()
@@ -54,6 +65,18 @@ class FakeQueue:
 
     def stored_object_keys(self) -> set[str]:
         return set(self.keys)
+
+    def next_photo_for_faces(self) -> PhotoForFaces | None:
+        return self.for_faces[0] if self.for_faces else None
+
+    def record_faces(
+        self, photo_id: int, faces: Sequence[DetectedFace], now: datetime
+    ) -> list[FaceMatches] | None:
+        self.for_faces = [photo for photo in self.for_faces if photo.photo_id != photo_id]
+        if self.row_gone:
+            return None
+        self.recorded_faces.append((photo_id, list(faces)))
+        return self.matches
 
 
 class FakePhotos:
@@ -88,6 +111,27 @@ class FakeStore:
     def delete(self, key: str) -> None:
         self.files.pop(key, None)
 
+    def get(self, key: str) -> bytes:
+        if self.fail_with is not None:
+            raise self.fail_with
+        if key not in self.files:
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
+        return self.files[key][0]
+
+
+class FakeFaces:
+    """Answers with the given faces, or raises the given error, and notes each photo."""
+
+    def __init__(self, result: list[DetectedFace] | FaceAnalysisError | None = None) -> None:
+        self.result = [] if result is None else result
+        self.photos: list[bytes] = []
+
+    def analyze(self, jpeg: bytes) -> list[DetectedFace]:
+        self.photos.append(jpeg)
+        if isinstance(self.result, FaceAnalysisError):
+            raise self.result
+        return self.result
+
 
 def no_sleep(_seconds: float) -> None:
     pass
@@ -102,7 +146,7 @@ def pending(attempts: int = 0) -> PendingPhoto:
 def make_service(
     queue: FakeQueue, photos: FakePhotos, store: FakeStore, clock: Clock, sleeps: list[float]
 ) -> FaceWorkerService:
-    service = FaceWorkerService(queue, photos, store, now=clock, sleep=sleeps.append)
+    service = FaceWorkerService(queue, photos, store, FakeFaces(), now=clock, sleep=sleeps.append)
     service.step()  # the first step after a start is the cleanup; get it out of the way
     sleeps.clear()
     return service
@@ -211,7 +255,7 @@ def test_cleanup_deletes_only_old_files_the_database_does_not_know(clock: Clock)
         # Uploaded moments ago, its row may not be updated yet: kept.
         "notices/1900-1/fresh": (PHOTO, START - timedelta(minutes=10)),
     }
-    service = FaceWorkerService(queue, FakePhotos(), store, now=clock, sleep=no_sleep)
+    service = FaceWorkerService(queue, FakePhotos(), store, FakeFaces(), now=clock, sleep=no_sleep)
 
     with capture_logs() as logs:
         service.step()
@@ -222,7 +266,7 @@ def test_cleanup_deletes_only_old_files_the_database_does_not_know(clock: Clock)
 
 def test_cleanup_runs_at_start_and_then_once_a_day(clock: Clock) -> None:
     queue, store = FakeQueue(), FakeStore(clock)
-    service = FaceWorkerService(queue, FakePhotos(), store, now=clock, sleep=no_sleep)
+    service = FaceWorkerService(queue, FakePhotos(), store, FakeFaces(), now=clock, sleep=no_sleep)
 
     def cleanups_in_one_step() -> int:
         with capture_logs() as logs:
@@ -240,7 +284,7 @@ def test_run_stops_when_asked(clock: Clock) -> None:
     queue = FakeQueue()
     sleeps: list[float] = []
     service = FaceWorkerService(
-        queue, FakePhotos(), FakeStore(clock), now=clock, sleep=sleeps.append
+        queue, FakePhotos(), FakeStore(clock), FakeFaces(), now=clock, sleep=sleeps.append
     )
     answers = iter([False, False, True])
 
@@ -248,3 +292,172 @@ def test_run_stops_when_asked(clock: Clock) -> None:
 
     # Step 1 is the cleanup, step 2 finds nothing and waits; then the loop stops.
     assert sleeps == [60.0]
+
+
+# --- Faces (ADR 0012) --------------------------------------------------------------------
+
+FACE = DetectedFace(10, 20, 30, 40, 0.95, [1.0, 0.0])
+KEY = "notices/1900-1/111"
+
+
+def face_service(
+    queue: FakeQueue, store: FakeStore, faces: FakeFaces, clock: Clock, sleeps: list[float]
+) -> FaceWorkerService:
+    service = FaceWorkerService(queue, FakePhotos(), store, faces, now=clock, sleep=sleeps.append)
+    service.step()  # the start-up cleanup
+    sleeps.clear()
+    return service
+
+
+def downloaded(queue: FakeQueue, store: FakeStore) -> None:
+    """One downloaded photo, waiting for face analysis."""
+    queue.for_faces = [PhotoForFaces(photo_id=7, object_key=KEY)]
+    queue.keys = {KEY}
+    store.files[KEY] = (PHOTO, START)
+
+
+def test_faces_of_a_downloaded_photo_are_found_and_recorded(clock: Clock) -> None:
+    queue, store, faces = FakeQueue(pending()), FakeStore(clock), FakeFaces([FACE])
+    downloaded(queue, store)
+    service = face_service(queue, store, faces, clock, sleeps=[])
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert faces.photos == [PHOTO]
+    assert queue.recorded_faces == [(7, [FACE])]
+    assert logs[-1] == {
+        "event": "faces_analysed",
+        "log_level": "info",
+        "photo_id": 7,
+        "faces": 1,
+    }
+
+
+def test_faces_come_before_downloads(clock: Clock) -> None:
+    queue, store = FakeQueue(pending()), FakeStore(clock)
+    downloaded(queue, store)
+    photos = FakePhotos()
+    service = FaceWorkerService(queue, photos, store, FakeFaces([FACE]), now=clock, sleep=no_sleep)
+    service.step()  # cleanup
+
+    service.step()
+    assert queue.recorded_faces != [] and photos.requests == []
+
+    service.step()
+    assert photos.requests == [("1900/1", "111")]
+
+
+def test_possible_matches_and_mismatches_are_logged_with_ids_only(clock: Clock) -> None:
+    queue, store = FakeQueue(), FakeStore(clock)
+    downloaded(queue, store)
+    queue.matches = [
+        FaceMatches(
+            face_id=501,
+            same_notice=[
+                SimilarFace(face_id=500, photo_id=6, notice_id=1, distance=0.2),
+                SimilarFace(face_id=499, photo_id=5, notice_id=1, distance=0.96421),
+            ],
+            other_notices=[SimilarFace(face_id=88, photo_id=9, notice_id=3, distance=0.38127)],
+        )
+    ]
+    service = face_service(queue, store, FakeFaces([FACE]), clock, sleeps=[])
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert logs[-2:] == [
+        {
+            "event": "possible_match",
+            "log_level": "warning",
+            "face_id": 501,
+            "match_face_id": 88,
+            "match_notice_id": 3,
+            "distance": 0.381,
+        },
+        {
+            "event": "notice_photo_mismatch",
+            "log_level": "warning",
+            "face_id": 501,
+            "other_face_id": 499,
+            "distance": 0.964,
+        },
+    ]
+
+
+def test_a_photo_that_cannot_be_decoded_is_recorded_without_faces(clock: Clock) -> None:
+    queue, store = FakeQueue(), FakeStore(clock)
+    downloaded(queue, store)
+    faces = FakeFaces(FaceAnalysisError("not_decodable"))
+    service = face_service(queue, store, faces, clock, sleeps=[])
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert queue.recorded_faces == [(7, [])]
+    assert logs[0] == {
+        "event": "face_analysis_failed",
+        "log_level": "warning",
+        "photo_id": 7,
+        "reason": "not_decodable",
+    }
+    assert queue.next_photo_for_faces() is None
+
+
+def test_a_missing_file_is_recorded_without_faces_and_not_analysed(clock: Clock) -> None:
+    queue, store, faces = FakeQueue(), FakeStore(clock), FakeFaces([FACE])
+    downloaded(queue, store)
+    del store.files[KEY]
+    service = face_service(queue, store, faces, clock, sleeps=[])
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert faces.photos == []
+    assert queue.recorded_faces == [(7, [])]
+    assert logs[0] == {"event": "photo_file_missing", "log_level": "warning", "photo_id": 7}
+
+
+def test_an_unreachable_store_leaves_the_photo_for_the_next_try(clock: Clock) -> None:
+    queue, store = FakeQueue(), FakeStore(clock)
+    downloaded(queue, store)
+    sleeps: list[float] = []
+    service = face_service(queue, store, FakeFaces([FACE]), clock, sleeps)
+    store.fail_with = EndpointConnectionError(endpoint_url="http://seaweedfs:8333")
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert queue.recorded_faces == []
+    assert queue.next_photo_for_faces() is not None
+    assert sleeps == [60.0]
+    assert logs[-1]["event"] == "dependency_unavailable"
+
+
+def test_other_store_errors_are_not_taken_for_a_missing_file(clock: Clock) -> None:
+    queue, store = FakeQueue(), FakeStore(clock)
+    downloaded(queue, store)
+    service = face_service(queue, store, FakeFaces([FACE]), clock, sleeps=[])
+    store.fail_with = ClientError({"Error": {"Code": "AccessDenied"}}, "GetObject")
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert queue.recorded_faces == []
+    assert logs[-1] == {
+        "event": "dependency_unavailable",
+        "log_level": "warning",
+        "error": "ClientError",
+    }
+
+
+def test_a_photo_row_deleted_during_the_analysis_is_logged(clock: Clock) -> None:
+    queue, store = FakeQueue(), FakeStore(clock)
+    downloaded(queue, store)
+    queue.row_gone = True
+    service = face_service(queue, store, FakeFaces([FACE]), clock, sleeps=[])
+
+    with capture_logs() as logs:
+        service.step()
+
+    assert logs[-1] == {"event": "photo_row_gone", "log_level": "info", "photo_id": 7}

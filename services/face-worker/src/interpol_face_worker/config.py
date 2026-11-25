@@ -1,5 +1,7 @@
 """Configuration for the face worker, loaded from environment variables."""
 
+from pathlib import Path
+
 from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,5 +33,8 @@ class FaceWorkerSettings(BaseSettings):
     # Pointed at a fake server for end-to-end runs, so no real photo is downloaded.
     interpol_base_url: str = "https://ws-public.interpol.int/notices/v1/red"
     idle_seconds: float = Field(default=60.0, gt=0)
+    # The ONNX models of ADR 0012; the Docker image downloads them to these paths.
+    detector_model_path: Path = Path("/app/models/face_detection_yunet_2023mar.onnx")
+    recognizer_model_path: Path = Path("/app/models/face_recognition_sface_2021dec.onnx")
     log_level: LogLevel = "INFO"
     log_format: LogFormat = "json"

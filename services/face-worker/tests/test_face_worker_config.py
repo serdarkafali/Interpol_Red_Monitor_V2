@@ -4,6 +4,8 @@ Not called test_config.py: the collector already has a test module of that name 
 mypy names these test modules by their file names.
 """
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -19,6 +21,8 @@ NAMES = (
     "FACE_WORKER_STORAGE_SECRET_KEY",
     "FACE_WORKER_INTERPOL_BASE_URL",
     "FACE_WORKER_IDLE_SECONDS",
+    "FACE_WORKER_DETECTOR_MODEL_PATH",
+    "FACE_WORKER_RECOGNIZER_MODEL_PATH",
 )
 
 
@@ -84,3 +88,17 @@ def test_a_non_positive_idle_time_is_refused(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(ValidationError):
         FaceWorkerSettings()
+
+
+@pytest.mark.usefixtures("shared_variables")
+def test_model_paths_default_to_the_image_and_can_be_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert FaceWorkerSettings().detector_model_path == Path(
+        "/app/models/face_detection_yunet_2023mar.onnx"
+    )
+
+    # Locally, the models downloaded for the model comparison can be used instead.
+    monkeypatch.setenv("FACE_WORKER_RECOGNIZER_MODEL_PATH", "samples/models/sface.onnx")
+
+    assert FaceWorkerSettings().recognizer_model_path == Path("samples/models/sface.onnx")
