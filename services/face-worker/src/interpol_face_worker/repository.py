@@ -12,7 +12,19 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Connection, Integer, Row, cast, func, insert, literal, or_, select, update
+from sqlalchemy import (
+    Connection,
+    Integer,
+    Row,
+    cast,
+    delete,
+    func,
+    insert,
+    literal,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from interpol_db import Face, FaceMatch, Notice, NoticePhoto
@@ -180,8 +192,9 @@ def record_faces(
     """Save the faces of a photo and mark it as analysed, even if it has no face.
 
     Return the ids of the new faces in the order given, or None if the row is gone or
-    was already analysed; nothing is written then. The caller's transaction makes both
-    writes happen together or not at all.
+    was already analysed; nothing is written then. Faces left from an earlier analysis
+    (after faces_processed_at was reset, e.g. for a new model) are replaced, and their
+    matches go with them. The caller's transaction makes the writes happen together.
     """
     result = connection.execute(
         update(NoticePhoto)
@@ -190,6 +203,7 @@ def record_faces(
     )
     if result.rowcount != 1:
         return None
+    connection.execute(delete(Face).where(Face.photo_id == photo_id))
     if not faces:
         return []
     face_ids = connection.execute(

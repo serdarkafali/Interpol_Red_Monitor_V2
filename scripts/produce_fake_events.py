@@ -12,6 +12,12 @@ ingestor (ADR 0008):
 - 1900/6 observed with a country code the countries table does not know (added)
 - 1900/99 seen without ever being observed (ignored)
 
+and, for the face worker (ADR 0012; faces from scripts/prepare_e2e_faces.py):
+
+- 1900/7 two photos of one synthetic person (they match each other)
+- 1900/8 one photo of the same synthetic person (a possible match with 1900/7)
+- 1900/9 two photos of two different synthetic people (a photo mismatch)
+
 Run from the repository root while Kafka is up:
     uv run --env-file .env python scripts/produce_fake_events.py
 
@@ -56,8 +62,9 @@ def detail(**changes: Any) -> dict[str, Any]:
     }
 
 
-def observed(entity_id: str, raw: dict[str, Any]) -> NoticeObserved:
-    pictures = [f"{entity_id.replace('/', '-')}-photo"]
+def observed(entity_id: str, raw: dict[str, Any], photos: int = 1) -> NoticeObserved:
+    base = f"{entity_id.replace('/', '-')}-photo"
+    pictures = [base] if photos == 1 else [f"{base}-{number}" for number in range(1, photos + 1)]
     snapshot = NoticeSnapshot.model_validate(
         {
             "detail": raw,
@@ -93,6 +100,9 @@ def main() -> None:
         removed("1900/3"),
         observed("1900/5", detail(arrest_warrants=[{"issuing_country_id": "N1", "charge": "x"}])),
         observed("1900/6", detail(nationalities=["DE", "QZ"])),
+        observed("1900/7", detail(), photos=2),
+        observed("1900/8", detail()),
+        observed("1900/9", detail(), photos=2),
         seen("1900/99"),
     ]
     for event in events:

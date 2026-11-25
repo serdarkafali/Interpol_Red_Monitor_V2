@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from interpol_face_worker.face_analysis import (
+    MIN_FACE_SIZE,
     MODEL_NAME,
     DetectedFace,
     FaceAnalysisError,
@@ -110,15 +111,31 @@ def test_one_face_gives_its_box_score_and_normalised_embedding() -> None:
 
 
 def test_every_face_on_the_photo_is_returned_in_detector_order() -> None:
-    rows = [yunet_row(10, 20, 30, 40, 0.95), yunet_row(50, 60, 20, 25, 0.91)]
+    rows = [yunet_row(10, 20, 60, 80, 0.95), yunet_row(90, 60, 50, 65, 0.91)]
     recognizer = FakeRecognizer()
 
     faces = analyzer(FakeDetector(rows), recognizer).analyze(jpeg(224, 224))
 
-    assert [face.box_x for face in faces] == [10, 50]
+    assert [face.box_x for face in faces] == [10, 90]
     assert faces[1].embedding[:3] == pytest.approx([0.0, 0.0, 1.0])
     # SFace aligns each face with its own YuNet row, landmarks included.
     assert np.allclose(recognizer.aligned_rows, rows)
+
+
+def test_faces_smaller_than_the_minimum_size_are_skipped() -> None:
+    small = MIN_FACE_SIZE - 1
+    rows = [
+        yunet_row(0, 0, small, 100, 0.95),  # too narrow
+        yunet_row(0, 0, 100, small, 0.95),  # too short
+        yunet_row(5, 5, MIN_FACE_SIZE, MIN_FACE_SIZE, 0.95),  # just large enough
+    ]
+    recognizer = FakeRecognizer()
+
+    faces = analyzer(FakeDetector(rows), recognizer).analyze(jpeg(224, 224))
+
+    assert [face.box_x for face in faces] == [5]
+    # Skipped faces are never aligned or embedded.
+    assert len(recognizer.aligned_rows) == 1
 
 
 def test_detected_face_cannot_be_changed() -> None:

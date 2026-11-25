@@ -13,7 +13,17 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import Connection, Engine, create_engine, delete, func, insert, select, text
+from sqlalchemy import (
+    Connection,
+    Engine,
+    create_engine,
+    delete,
+    func,
+    insert,
+    select,
+    text,
+    update,
+)
 from testcontainers.community.postgres import PostgresContainer
 
 from interpol_db import EMBEDDING_DIMENSIONS, Face, FaceMatch, Notice, NoticePhoto
@@ -369,6 +379,23 @@ def test_record_faces_of_a_deleted_or_analysed_photo_writes_nothing(
     assert record_faces(connection, analysed_id, [detected(0)], NOW) is None
     assert record_faces(connection, deleted_id, [detected(0)], NOW) is None
     assert connection.execute(select(func.count()).select_from(Face)).scalar_one() == 0
+
+
+def test_record_faces_again_replaces_the_faces_of_an_earlier_analysis(
+    connection: Connection,
+) -> None:
+    photo_id = add_photo(connection, add_notice(connection, "1900/1"), "111", downloaded=True)
+    old_ids = record_faces(connection, photo_id, [detected(0), detected(90)], NOW)
+    # As after a model change: the photo is marked for a new analysis.
+    connection.execute(
+        update(NoticePhoto).where(NoticePhoto.id == photo_id).values(faces_processed_at=None)
+    )
+
+    new_ids = record_faces(connection, photo_id, [detected(45)], NOW)
+
+    face_ids = connection.execute(select(Face.id).where(Face.photo_id == photo_id)).scalars()
+    assert list(face_ids) == new_ids
+    assert old_ids is not None and set(old_ids).isdisjoint(new_ids or [])
 
 
 def test_find_similar_faces_returns_close_faces_of_other_notices_nearest_first(

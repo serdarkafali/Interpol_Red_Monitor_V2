@@ -3,7 +3,8 @@
 # Adds a fake Interpol photo server and points the face worker at it. Used together with
 # the main file:
 #   docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile face-worker up -d --build face-worker
-# The fake server serves one made-up grey JPEG; see scripts/fake_interpol_photos.py.
+# The fake server serves a made-up grey JPEG, or the synthetic faces that
+# scripts/prepare_e2e_faces.py wrote to samples/e2e-faces; see scripts/fake_interpol_photos.py.
 
 services:
   fake-interpol:
@@ -11,6 +12,7 @@ services:
     command: ["python", "/app/fake_interpol_photos.py"]
     volumes:
       - ./scripts/fake_interpol_photos.py:/app/fake_interpol_photos.py:ro
+      - ./samples/e2e-faces:/faces:ro
     restart: "no"
 
   face-worker:
