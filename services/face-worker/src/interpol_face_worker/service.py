@@ -1,21 +1,29 @@
-"""The face worker's main loop (ADR 0011).
+"""The face worker's main loop (ADR 0011, ADR 0012).
 
-One step either downloads the next pending photo or, once a day, deletes files in the
-store that the database no longer refers to. Shutdown is honoured between steps.
+One step does one thing, in this order: once a day, delete files in the store that the
+database no longer refers to; otherwise find the faces on the next downloaded photo;
+otherwise download the next pending photo; otherwise wait. Shutdown is honoured
+between steps.
 """
 
 import hashlib
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy.exc import OperationalError
 
+from interpol_face_worker.face_analysis import DetectedFace, FaceAnalysisError
 from interpol_face_worker.interpol_photos import PhotoDownloadError
 from interpol_face_worker.photo_store import StoredObject, object_key
-from interpol_face_worker.repository import MAX_DOWNLOAD_ATTEMPTS, PendingPhoto
+from interpol_face_worker.repository import (
+    MAX_DOWNLOAD_ATTEMPTS,
+    FaceMatches,
+    PendingPhoto,
+    PhotoForFaces,
+)
 from interpol_observability import get_logger
 
 # The store or the database being unreachable is not the photo's fault: the step is
@@ -36,13 +44,15 @@ class PhotoStore(Protocol):
 
     def put(self, key: str, content: bytes) -> None: ...
 
+    def get(self, key: str) -> bytes: ...
+
     def list_objects(self) -> Iterable[StoredObject]: ...
 
     def delete(self, key: str) -> None: ...
 
 
 class PhotoQueue(Protocol):
-    """The database side: which photos to download and what happened to them."""
+    """The database side: which photos to process and what happened to them."""
 
     def next_pending_photo(self, now: datetime) -> PendingPhoto | None: ...
 
@@ -54,19 +64,32 @@ class PhotoQueue(Protocol):
 
     def stored_object_keys(self) -> set[str]: ...
 
+    def next_photo_for_faces(self) -> PhotoForFaces | None: ...
+
+    def record_faces(
+        self, photo_id: int, faces: Sequence[DetectedFace], now: datetime
+    ) -> list[FaceMatches] | None: ...
+
+
+class FaceDetector(Protocol):
+    """What finds the faces on a photo (the YuNet + SFace face analyzer)."""
+
+    def analyze(self, jpeg: bytes) -> list[DetectedFace]: ...
+
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
 class FaceWorkerService:
-    """Downloads pending photos one at a time and cleans up orphaned files daily."""
+    """Downloads photos, finds their faces one photo at a time, cleans up daily."""
 
     def __init__(
         self,
         queue: PhotoQueue,
         photos: PhotoSource,
         store: PhotoStore,
+        faces: FaceDetector,
         *,
         now: Callable[[], datetime] = utc_now,
         sleep: Callable[[float], object] = time.sleep,
@@ -77,6 +100,7 @@ class FaceWorkerService:
         self._queue = queue
         self._photos = photos
         self._store = store
+        self._faces = faces
         self._now = now
         self._sleep = sleep
         self._idle_seconds = idle_seconds
@@ -91,10 +115,16 @@ class FaceWorkerService:
             self.step()
 
     def step(self) -> None:
-        """Clean up if it is due, otherwise download one photo or wait."""
+        """Clean up if it is due, otherwise analyse or download one photo, or wait."""
         try:
             if self._cleanup_due():
                 self._clean_up()
+                return
+            # Faces before downloads: a downloaded photo is analysed at once, even while
+            # a long download backlog is still being worked through.
+            photo_for_faces = self._queue.next_photo_for_faces()
+            if photo_for_faces is not None:
+                self._process_faces(photo_for_faces)
                 return
             photo = self._queue.next_pending_photo(self._now())
             if photo is None:
@@ -142,6 +172,51 @@ class FaceWorkerService:
         else:
             # The ingestor dropped the photo meanwhile; the cleanup will delete the file.
             logger.info("photo_row_gone", entity_id=photo.entity_id, picture_id=photo.picture_id)
+
+    def _process_faces(self, photo: PhotoForFaces) -> None:
+        """Find the faces on one downloaded photo and save them with their matches.
+
+        A missing file or a photo that cannot be decoded counts as a photo without
+        faces: it is marked as analysed and logged, so it is not retried forever.
+        """
+        try:
+            content = self._store.get(photo.object_key)
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "NoSuchKey":
+                raise  # the store itself failed: step() waits and tries again
+            logger.warning("photo_file_missing", photo_id=photo.photo_id)
+            faces: list[DetectedFace] = []
+        else:
+            try:
+                faces = self._faces.analyze(content)
+            except FaceAnalysisError as exc:
+                logger.warning("face_analysis_failed", photo_id=photo.photo_id, reason=exc.reason)
+                faces = []
+
+        results = self._queue.record_faces(photo.photo_id, faces, self._now())
+        if results is None:
+            # The ingestor dropped the photo meanwhile; nothing was written.
+            logger.info("photo_row_gone", photo_id=photo.photo_id)
+            return
+
+        # Only ids and distances: a possible match is for human review, not a verdict.
+        logger.info("faces_analysed", photo_id=photo.photo_id, faces=len(faces))
+        for result in results:
+            for match in result.other_notices:
+                logger.warning(
+                    "possible_match",
+                    face_id=result.face_id,
+                    match_face_id=match.face_id,
+                    match_notice_id=match.notice_id,
+                    distance=round(match.distance, 3),
+                )
+            for mismatch in result.mismatches:
+                logger.warning(
+                    "notice_photo_mismatch",
+                    face_id=result.face_id,
+                    other_face_id=mismatch.face_id,
+                    distance=round(mismatch.distance, 3),
+                )
 
     def _clean_up(self) -> None:
         """Delete files the database does not refer to and that are older than the grace."""

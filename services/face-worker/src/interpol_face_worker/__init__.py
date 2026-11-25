@@ -1,4 +1,4 @@
-"""Face worker: downloads notice photos from Interpol into the object store (ADR 0011)."""
+"""Face worker: downloads notice photos and finds their faces (ADR 0011, ADR 0012)."""
 
 import signal
 import threading
@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 
 from interpol_face_worker.config import FaceWorkerSettings
 from interpol_face_worker.curl_transport import CurlTransport
+from interpol_face_worker.face_analysis import FaceAnalyzer
 from interpol_face_worker.interpol_photos import PhotoClient
 from interpol_face_worker.photo_store import S3PhotoStore
 from interpol_face_worker.repository import PhotoRepository
@@ -43,6 +44,8 @@ def main() -> None:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
 
+    # Loaded before anything else runs, so a missing model file stops the start at once.
+    faces = FaceAnalyzer.load(settings.detector_model_path, settings.recognizer_model_path)
     # pool_pre_ping replaces connections the database closed while the service waited.
     engine = create_engine(settings.database_url.get_secret_value(), pool_pre_ping=True)
     service = FaceWorkerService(
@@ -55,6 +58,7 @@ def main() -> None:
             settings.storage_secret_key.get_secret_value(),
             settings.storage_bucket,
         ),
+        faces=faces,
         # An idle wait ends at once when a stop is requested.
         sleep=stop.wait,
         idle_seconds=settings.idle_seconds,
