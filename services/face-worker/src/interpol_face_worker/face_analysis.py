@@ -16,8 +16,11 @@ import numpy as np
 # Stored in faces.model so embeddings from different models are never compared.
 MODEL_NAME = "sface-2021dec"
 
-# YuNet drops faces whose confidence is below this value.
-MIN_DETECTION_SCORE = 0.9
+# YuNet drops faces whose confidence is below this value (ADR 0012).
+MIN_DETECTION_SCORE = 0.6
+# Faces whose shorter box side is below this many pixels are skipped: the embeddings of
+# tiny, blurry faces produce false matches (ADR 0012).
+MIN_FACE_SIZE = 40
 
 # Only a starting value: analyze() sets the real size of every photo.
 _INITIAL_INPUT_SIZE = (320, 320)
@@ -78,9 +81,11 @@ class FaceAnalyzer:
 
         detected: list[DetectedFace] = []
         for row in faces:
+            box_x, box_y, box_width, box_height = (int(value) for value in row[:4])
+            if min(box_width, box_height) < MIN_FACE_SIZE:
+                continue
             aligned = self._recognizer.alignCrop(image, row)
             feature = self._recognizer.feature(aligned)
-            box_x, box_y, box_width, box_height = (int(value) for value in row[:4])
             detected.append(
                 DetectedFace(
                     box_x=box_x,

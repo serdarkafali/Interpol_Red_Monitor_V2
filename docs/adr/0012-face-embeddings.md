@@ -1,6 +1,6 @@
 # ADR 0012: Yüzleri bulmak, vektöre çevirmek ve benzerlerini aramak
 
-- **Durum:** Kabul edildi
+- **Durum:** Kabul edildi; 2026-11-25'te "Benzerlik araması" bölümü güncellendi
 - **Tarih:** 2026-11-24
 - **Karar verenler:** Serdar Kafalı
 - **İlişkili:** ADR 0004 (pgvector), ADR 0011 (face-worker ve fotoğraf deposu)
@@ -83,8 +83,9 @@ yavaşlatmaz.
    yüzler atlanır: kötü yüzlerin vektörleri yanlış eşleşme üretir.
 4. Kalan her yüz, YuNet'in beş noktasıyla `alignCrop` ile 112x112 hizalanır ve SFace ile
    vektöre çevrilir; vektörün uzunluğu 1'e ölçeklenir.
-5. Tek transaction'da: fotoğrafın eski yüz satırları silinir, yenileri eklenir ve
-   `faces_processed_at` doldurulur. Hiç yüz bulunmasa da doldurulur; fotoğraf tekrar
+5. Tek transaction'da: fotoğrafın eski yüz satırları silinir, yenileri eklenir,
+   `faces_processed_at` doldurulur ve her yeni yüz karşılaştırılıp sonuçlar
+   `face_matches`'e yazılır (aşağıda). Hiç yüz bulunmasa da doldurulur; fotoğraf tekrar
    işlenmez.
 
 Çözülemeyen bir dosya da işlenmiş sayılır ve loglanır. Depoya ya da veritabanına
@@ -99,7 +100,7 @@ Bir migration ile:
 - `notice_photos.faces_processed_at timestamptz` (boş olabilir).
 - Yeni `faces` tablosu: `id`, `photo_id` (FK, `ON DELETE CASCADE`), yüz kutusu (`box_x`,
   `box_y`, `box_width`, `box_height`), `detection_score`, `embedding vector(128)`,
-  `model` (ör. `yunet-2023mar+sface-2021dec`), `created_at`.
+  `model` (`sface-2021dec`), `created_at`.
 - `embedding` üzerinde kosinüs uzaklığına göre HNSW index (`vector_cosine_ops`).
 
 `CASCADE` sayesinde ingestor bir fotoğraf satırını sildiğinde ya da Faz 8'deki kalıcı
@@ -109,16 +110,30 @@ değişirse `faces_processed_at` sıfırlanarak fotoğraflar yeniden işlenir.
 
 ### Benzerlik araması
 
-Eşleşmeler önceden hesaplanıp bir tabloya yazılmaz; sorgu anında pgvector ile aranır:
-"bu yüze en yakın N yüz". Veri küçük (on binlerce yüz) ve eşik değiştiğinde önceden
-hesaplanmış sonuçların hepsi geçersiz kalırdı. İki sorgu yazılır:
+Arama pgvector ile yapılır: "bu yüze en yakın N yüz". İki karşılaştırma vardır:
 
-- **Kayıtlar arası:** bir yüze benzeyen, **başka kayıtlara** ait yüzler.
-- **Kayıt içi:** bir kaydın yüzlerinin birbirine benzerliği; eşiğin altında kalan çiftler
-  "tutarsız olabilir" diye işaretlenir.
+- **Kayıtlar arası:** bir yüze benzeyen, **başka aktif kayıtlara** ait en yakın 10 yüz;
+  yalnızca eşiğin altında kalanlar.
+- **Kayıt içi:** bir kaydın diğer bütün yüzleri, uzaklık ne olursa olsun. Eşiğin
+  üstünde kalan çiftler "bu fotoğraf kaydın kişisine benzemiyor" demektir.
 
 Başlangıç eşiği **0,443** (benzerlik; pgvector'ün `<=>` uzaklığı için 0,557). Bir ayardır
 ve gerçek fotoğraflarda yeniden değerlendirilecek.
+
+**Güncelleme (2026-11-25).** İlk kararda eşleşmeler yalnızca sorgu anında aranacaktı.
+Serdar, karşılaştırmanın kendiliğinden çalışmasını ve sonuçların ileride bir API'de
+gösterilip bir alarma bağlanabilmesini istedi. Bu yüzden karşılaştırma her yeni yüz
+kaydedildiğinde, aynı transaction'da yapılır ve sonuçlar `face_matches` tablosuna
+yazılır: `first_face_id`, `second_face_id` (küçük id önce; her çift bir kez), `distance`,
+`same_notice`, `created_at`. Yüz silinince eşleşmeleri de silinir (`CASCADE`). Her yeni
+yüz eski yüzlerle karşılaştırıldığı için her çift, ikinci yüzü kaydedilirken bir kez
+bulunur; eski yüzler yeniden aranmaz. Eşik değişirse kayıt içi çiftler yeniden
+hesaplanmadan doğru kalır (bütün uzaklıklar saklanıyor); kayıtlar arası çiftler ise
+eski eşikle seçilmiş olur ve gerekirse yeniden hesaplanır.
+
+Servis her sonucu loglar: başka kayıtla olası eşleşme `possible_match`, kayıt içi
+tutarsızlık `notice_photo_mismatch` (ikisi de `warning`). Loglarda yalnızca yüz ve kayıt
+id'leri ile uzaklık bulunur.
 
 ### Etik ilke
 
@@ -153,16 +168,40 @@ yüzlerle çalışmayı gerektirir; gizlilik ilkemizle çelişir. Reddedildi.
 tekrar edecek ve yeni bir container getirecekti. İşlem süresi küçük olduğu için gerek
 yok. Reddedildi; yük artarsa face-worker'dan ayrılabilir.
 
-**Eşleşmeleri önceden hesaplayıp tablolamak.** Okuma hızlı olurdu ama her yeni yüzde ve her
-eşik değişikliğinde yeniden hesaplama gerekir. Bu veri boyutunda sorgu anında arama yeterli.
-Reddedildi.
+**Eşleşmeleri yalnızca sorgu anında aramak.** İlk karar buydu. Sonuçlar bir yerde
+durmadığı için API'de listelenemez ve bir alarma bağlanamazdı. 2026-11-25'te
+`face_matches` tablosu lehine bırakıldı (yukarıdaki güncelleme).
 
 ## Sonuçlar
 
-Fotoğraflardaki yüzler açık lisanslı, hafif bir modelle vektöre çevrilecek ve benzerler
-pgvector ile aranabilecek. Face-worker'a ek bir servis eklenmeden yeni bir iş eklenecek.
+Fotoğraflardaki yüzler açık lisanslı, hafif bir modelle vektöre çevrilir, benzerleri
+pgvector ile bulunur ve sonuçlar `face_matches`'e yazılır. Face-worker'a ek bir servis
+eklenmeden yeni bir iş eklendi.
 
 Kabul edilen bedeller: SFace, en iyi modele göre daha çok gerçek eşleşmeyi kaçırıyor; eşik
 sentetik verilerle seçildi ve gerçek fotoğraflarda farklı davranabilir; face-worker'ın
 imajı OpenCV ve model dosyalarıyla büyüyecek; yüz işleme indirmelerle aynı döngüde
 çalıştığı için biri yavaşlarsa diğeri bekler.
+
+## Doğrulama
+
+Uçtan uca deneme (2026-11-25, Claude'un ortamında, Docker olmadan): yerel PostgreSQL +
+pgvector, yerel SeaweedFS, sahte Interpol sunucusu (`scripts/fake_interpol_photos.py`) ve
+`uv run` ile çalışan face-worker. Notice satırları, ingestor'ın
+`scripts/produce_fake_events.py` için yazacağı satırlarla aynı şekilde elle eklendi.
+Yüzler DigiFace-1M'den (sentetik) `scripts/prepare_e2e_faces.py` ile seçildi; gerçek bir
+kişi ya da gerçek Interpol verisi kullanılmadı.
+
+| Kayıt | Beklenen | Sonuç |
+| --- | --- | --- |
+| `1900/1` | Gri JPEG, yüz yok | `faces_analysed`, `faces: 0`; fotoğraf işlenmiş sayıldı |
+| `1900/2`, `1900/6` | İndirme reddedilir | `not_jpeg`, `not_found`; yüz adımına hiç gelmedi |
+| `1900/3` | Kaldırılmış kayıt | Log yok |
+| `1900/7` (2 foto) | Aynı kişi | Kayıt içi uzaklık 0,419; `notice_photo_mismatch` yok |
+| `1900/8` | `1900/7` ile aynı kişi | İki `possible_match` (0,366 ve 0,378) |
+| `1900/9` (2 foto) | İki farklı kişi | `notice_photo_mismatch`, uzaklık 0,884 |
+
+`face_matches`'te dört satır oluştu: iki kayıt içi (0,419 ve 0,884) ve iki kayıtlar arası
+(0,366 ve 0,378). Bir fotoğrafın `faces_processed_at`'i sıfırlanınca yeniden işlendi;
+eski yüz satırı yenisiyle değişti ve eşleşmesi yeniden yazıldı. Docker imajıyla aynı
+denemeyi Serdar kendi makinesinde yapacak.

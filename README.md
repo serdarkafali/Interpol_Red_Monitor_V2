@@ -101,8 +101,8 @@ docker compose logs ingestor
 
 Ayrıntılar: [`services/ingestor/README.md`](services/ingestor/README.md).
 
-Face-worker gerçek Interpol API'sine istek attığı için düz `docker compose up` ile
-başlamaz. Gerçek bir fotoğraf indirmeden uçtan uca denemek için sahte bir Interpol
+Face-worker fotoğrafları indirir, yüzleri bulur ve karşılaştırır (ADR 0011, ADR 0012).
+Gerçek Interpol API'sine istek attığı için düz `docker compose up` ile başlamaz. Gerçek bir fotoğraf indirmeden uçtan uca denemek için sahte bir Interpol
 sunucusuyla başlatılır (uydurma olaylar yazıldıktan sonra):
 
 ```powershell
