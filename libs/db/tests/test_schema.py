@@ -11,7 +11,16 @@ from sqlalchemy import Connection, delete, func, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
-from interpol_db import ArrestWarrant, Country, Notice, NoticePhoto, notice_nationalities
+from interpol_db import (
+    EMBEDDING_DIMENSIONS,
+    ArrestWarrant,
+    Country,
+    Face,
+    FaceMatch,
+    Notice,
+    NoticePhoto,
+    notice_nationalities,
+)
 
 
 def insert_notice(connection: Connection, **values: Any) -> int:
@@ -114,3 +123,57 @@ def test_updated_at_changes_when_the_content_changes(connection: Connection) -> 
 
     updated_at = connection.execute(select(Notice.updated_at)).scalar_one()
     assert updated_at > yesterday
+
+
+def insert_face(connection: Connection, photo_id: int) -> int:
+    """Insert a made-up face with a unit embedding and return its id."""
+    face_id: int = connection.execute(
+        insert(Face)
+        .values(
+            photo_id=photo_id,
+            box_x=0,
+            box_y=0,
+            box_width=10,
+            box_height=10,
+            detection_score=0.95,
+            embedding=[1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1),
+            model="test-model",
+        )
+        .returning(Face.id)
+    ).scalar_one()
+    return face_id
+
+
+def test_face_match_pair_must_have_the_smaller_id_first(connection: Connection) -> None:
+    photo_id = connection.execute(
+        insert(NoticePhoto)
+        .values(notice_id=insert_notice(connection), picture_id="123")
+        .returning(NoticePhoto.id)
+    ).scalar_one()
+    first, second = insert_face(connection, photo_id), insert_face(connection, photo_id)
+
+    with pytest.raises(IntegrityError, match="ck_face_matches_pair_ordered"):
+        connection.execute(
+            insert(FaceMatch).values(
+                first_face_id=second, second_face_id=first, distance=0.1, same_notice=True
+            )
+        )
+
+
+def test_deleting_a_notice_deletes_its_faces_and_their_matches(connection: Connection) -> None:
+    photo_id = connection.execute(
+        insert(NoticePhoto)
+        .values(notice_id=insert_notice(connection), picture_id="123")
+        .returning(NoticePhoto.id)
+    ).scalar_one()
+    first, second = insert_face(connection, photo_id), insert_face(connection, photo_id)
+    connection.execute(
+        insert(FaceMatch).values(
+            first_face_id=first, second_face_id=second, distance=0.1, same_notice=True
+        )
+    )
+
+    connection.execute(delete(Notice))
+
+    for table in (Face.__table__, FaceMatch.__table__):
+        assert connection.execute(select(func.count()).select_from(table)).scalar_one() == 0
