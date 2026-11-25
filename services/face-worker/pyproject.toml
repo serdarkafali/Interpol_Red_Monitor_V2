@@ -13,6 +13,8 @@ dependencies = [
     "curl-cffi>=0.17.0",
     "interpol-db",
     "interpol-observability",
+    "numpy>=2.5.5",
+    "opencv-python-headless>=5.1.0.95",
     "pydantic>=2.14.4",
     "pydantic-settings>=2.16.3",
     "sqlalchemy>=2.1.9",
