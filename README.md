@@ -37,6 +37,7 @@ Kararların gerekçeleri [`docs/adr`](docs/adr) altındaki ADR'lerde:
 | [0010](docs/adr/0010-scoped-removal-hold.md) | Eksik okunan bölgede yalnızca o bölgenin kaldırmalarını durdurmak |
 | [0011](docs/adr/0011-face-worker-photo-download.md) | Face-worker'ın fotoğrafları indirip saklaması |
 | [0012](docs/adr/0012-face-embeddings.md) | Yüzleri bulmak, vektöre çevirmek ve benzerlerini aramak |
+| [0013](docs/adr/0013-web-interface.md) | Kayıtları, fotoğrafları ve olası eşleşmeleri gösteren web arayüzü |
 
 ## Repo yapısı
 
