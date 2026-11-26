@@ -472,3 +472,18 @@ def test_possible_matches_are_other_notices_closest_first(
     assert [m.face_id for m in detail.matches] == [own_face, own_face]
     assert [m.other_face_id for m in detail.matches] == [near_face, far_face]
     assert detail.matches[0].similarity == pytest.approx(0.8)
+
+
+def test_only_a_downloaded_photo_has_a_key(engine: Engine, queries: NoticeQueries) -> None:
+    notice_id = add_notice(engine, "2026/1", photo=True)
+    with engine.begin() as connection:
+        downloaded = connection.execute(text("SELECT id FROM notice_photos")).scalar_one()
+        waiting = connection.execute(
+            insert(NoticePhoto)
+            .values(notice_id=notice_id, picture_id="not-yet")
+            .returning(NoticePhoto.id)
+        ).scalar_one()
+
+    assert queries.photo_key(downloaded) == "notices/2026/1/pic"
+    assert queries.photo_key(waiting) is None
+    assert queries.photo_key(999999) is None

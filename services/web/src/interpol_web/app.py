@@ -9,17 +9,17 @@ from fastapi.templating import Jinja2Templates
 
 from interpol_web.auth import require_login
 from interpol_web.config import WebSettings
-from interpol_web.routes import NoticeReader, create_router
+from interpol_web.routes import NoticeReader, PhotoSource, create_router
 
 PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
 
-def create_app(settings: WebSettings, reader: NoticeReader) -> FastAPI:
+def create_app(settings: WebSettings, reader: NoticeReader, photos: PhotoSource) -> FastAPI:
     """Build the application; every page asks for the configured user name and password.
 
-    ``reader`` answers the notice searches and detail pages; main() hands in the
-    database queries, the tests a made-up one.
+    ``reader`` answers the notice searches and detail pages and ``photos`` hands out the
+    stored photos; main() hands in the database and the store, the tests made-up ones.
     """
     app = FastAPI(
         # No automatic API documentation: this is a set of pages, not an API, and the
@@ -42,5 +42,5 @@ def create_app(settings: WebSettings, reader: NoticeReader) -> FastAPI:
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    app.include_router(create_router(reader, templates))
+    app.include_router(create_router(reader, photos, templates))
     return app

@@ -100,6 +100,7 @@ a:hover { text-decoration: underline; }
 .card { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .photo {
   display: flex;
+  overflow: hidden;
   align-items: center;
   justify-content: center;
   height: 140px;
@@ -108,6 +109,8 @@ a:hover { text-decoration: underline; }
   background: #e8ebf0;
 }
 .photo.no-photo { background: #f1f2f4; }
+/* The whole photo is shown, never cropped: cutting off part of a face would mislead. */
+.photo img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .card-body { padding: 10px 12px; }
 .card .name { display: block; color: var(--text); font-weight: 600; }
 .facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; font-size: 13px; }

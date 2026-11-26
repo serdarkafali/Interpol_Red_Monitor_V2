@@ -81,6 +81,18 @@ face-worker'daki düzenin aynısı.
 Fotoğraflar tarayıcıya `/photos/{id}` adresinden, web servisinin S3'ten okumasıyla
 verilir. Tarayıcı depoya doğrudan bağlanmaz.
 
+Web servisi fotoğrafın yolunu (`object_key`) veritabanından okur; yalnızca indirilmiş
+fotoğraflar verilir, bilinmeyen bir id 404 döner ve depoya hiç sorulmaz. Fotoğraf
+`image/jpeg` ve `X-Content-Type-Options: nosniff` ile, sayfalar gibi giriş korumasının
+arkasından verilir.
+
+**Fotoğraf deposu anahtarı.** SeaweedFS şu an tek bir S3 anahtarıyla çalışıyor; web
+servisi de face-worker'ın kullandığı `STORAGE_*` anahtarını kullanır (kendi
+`WEB_STORAGE_*` değişkenleri verilirse onlar önceliklidir). Kod depoya yalnızca okuma
+çağrısı yapar (`get_object`), ama anahtarın kendisi yazabilir: veritabanındaki salt
+okunur kullanıcının dengi henüz yok. SeaweedFS'in kimlik dosyasıyla (`-s3.config`)
+yalnızca `Read` yetkili ikinci bir anahtar tanımlamak bilinen bir sonraki adım.
+
 Yüz kutuları fotoğrafın üzerine tarayıcıda çizilir: fotoğrafın asıl boyutu yüklendikten
 sonra okunur ve `faces` tablosundaki kutular oranlanarak yerleştirilir. Bunun için birkaç
 satırlık düz JavaScript yeterli. Fotoğrafın kendisi değiştirilmez.

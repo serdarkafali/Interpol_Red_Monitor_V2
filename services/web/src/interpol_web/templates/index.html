@@ -112,10 +112,14 @@
   <ul class="cards">
     {% for card in result.cards %}
       <li class="card">
-        {# The photo itself comes in step 6; until then only whether there is one. #}
-        <div class="photo {% if not card.photo_id %}no-photo{% endif %}">
-          {{ "Fotoğraf var" if card.photo_id else "Fotoğraf yok" }}
-        </div>
+        <a class="photo {% if not card.photo_id %}no-photo{% endif %}"
+           href="{{ url_for('notice_page', notice_id=card.id) }}" tabindex="-1">
+          {% if card.photo_id %}
+            <img src="{{ url_for('photo', photo_id=card.photo_id) }}" alt="" loading="lazy">
+          {% else %}
+            Fotoğraf yok
+          {% endif %}
+        </a>
         <div class="card-body">
           <a class="name" href="{{ url_for('notice_page', notice_id=card.id) }}">{{ card.forename or "" }} {{ card.name }}</a>
           <div class="muted small">{{ card.entity_id }}</div>

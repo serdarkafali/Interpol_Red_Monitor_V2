@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from interpol_observability import configure_logging, get_logger
 from interpol_web.app import create_app
 from interpol_web.config import WebSettings
+from interpol_web.photos import S3PhotoReader
 from interpol_web.queries import NoticeQueries
 
 SERVICE_NAME = "web"
@@ -32,9 +33,15 @@ def main() -> None:
         pool_pre_ping=True,
         connect_args={"connect_timeout": CONNECT_TIMEOUT_SECONDS},
     )
+    photos = S3PhotoReader.connect(
+        settings.storage_endpoint_url,
+        settings.storage_access_key.get_secret_value(),
+        settings.storage_secret_key.get_secret_value(),
+        settings.storage_bucket,
+    )
     try:
         uvicorn.run(
-            create_app(settings, NoticeQueries(engine.connect)),
+            create_app(settings, NoticeQueries(engine.connect), photos),
             host=settings.host,
             port=settings.port,
             # Keep our JSON logging instead of uvicorn's own format.

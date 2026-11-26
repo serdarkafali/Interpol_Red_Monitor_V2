@@ -183,6 +183,16 @@ class NoticeQueries:
                 issuers=_country_facet(connection, filters, today, ISSUER),
             )
 
+    def photo_key(self, photo_id: int) -> str | None:
+        """The store key of a downloaded photo, or None if there is no such photo."""
+        with self._connect() as connection:
+            key: str | None = connection.execute(
+                select(NoticePhoto.object_key).where(
+                    NoticePhoto.id == photo_id, NoticePhoto.downloaded_at.is_not(None)
+                )
+            ).scalar_one_or_none()
+            return key
+
     def notice(self, notice_id: int) -> NoticeDetail | None:
         """Return one notice with everything around it, or None if there is no such id."""
         today = self._today()
