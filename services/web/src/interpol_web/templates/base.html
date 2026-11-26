@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Interpol Red Notice Monitor{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}">Interpol Red Notice Monitor</a>
+    <nav>
+      <a href="{{ url_for('index') }}" class="{% block nav_notices %}{% endblock %}">Kayıtlar</a>
+      <span class="nav-soon" title="Faz 6, 7. adım">Olası eşleşmeler</span>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      {% block sidebar %}{% endblock %}
+    </aside>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>
