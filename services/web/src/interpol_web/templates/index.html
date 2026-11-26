@@ -117,7 +117,7 @@
           {{ "Fotoğraf var" if card.photo_id else "Fotoğraf yok" }}
         </div>
         <div class="card-body">
-          <div class="name">{{ card.forename or "" }} {{ card.name }}</div>
+          <a class="name" href="{{ url_for('notice_page', notice_id=card.id) }}">{{ card.forename or "" }} {{ card.name }}</a>
           <div class="muted small">{{ card.entity_id }}</div>
           <div class="facts">
             {% if card.age is not none %}<span>{{ card.age }} yaş</span>{% endif %}

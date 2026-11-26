@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% set sex_labels = {"M": "Erkek", "F": "Kadın", "U": "Bilinmiyor"} %}
+{% macro country(c) %}{{ c.name or c.code }}{% endmacro %}
+
+{% block title %}{{ notice.entity_id }} · Interpol Red Notice Monitor{% endblock %}
+{% block nav_notices %}active{% endblock %}
+
+{% block sidebar %}
+  <a href="{{ url_for('index') }}" class="small">‹ Listeye dön</a>
+  <h2 class="detail-name">{{ notice.forename or "" }} {{ notice.name }}</h2>
+  <p class="muted small">{{ notice.entity_id }}</p>
+  {% if notice.removed_at %}
+    <p class="badge removed">Interpol'den kaldırıldı · {{ notice.removed_at.strftime("%d.%m.%Y") }}</p>
+  {% endif %}
+
+  <dl class="facts-list">
+    <dt>Cinsiyet</dt><dd>{{ sex_labels.get(notice.sex, "—") if notice.sex else "—" }}</dd>
+    <dt>Doğum tarihi</dt>
+    <dd>
+      {% if notice.date_of_birth %}
+        {{ notice.date_of_birth.strftime("%d.%m.%Y") }}{% if notice.age is not none %} ({{ notice.age }} yaş){% endif %}
+      {% else %}—{% endif %}
+    </dd>
+    <dt>Doğum yeri</dt>
+    <dd>
+      {{ notice.place_of_birth or "" }}{% if notice.place_of_birth and notice.country_of_birth %}, {% endif %}
+      {{ country(notice.country_of_birth) if notice.country_of_birth else ("" if notice.place_of_birth else "—") }}
+    </dd>
+    <dt>Uyruk</dt>
+    <dd>{% for c in notice.nationalities %}{{ country(c) }}{% if not loop.last %}, {% endif %}{% else %}—{% endfor %}</dd>
+    <dt>Boy</dt><dd>{{ "%.2f m"|format(notice.height) if notice.height else "—" }}</dd>
+    <dt>Kilo</dt><dd>{{ "%d kg"|format(notice.weight) if notice.weight else "—" }}</dd>
+    <dt>Göz rengi</dt><dd>{{ notice.eye_colors | join(", ") or "—" }}</dd>
+    <dt>Saç rengi</dt><dd>{{ notice.hair_colors | join(", ") or "—" }}</dd>
+    <dt>Diller</dt><dd>{{ notice.languages | join(", ") or "—" }}</dd>
+    <dt>Ayırt edici işaretler</dt><dd>{{ notice.distinguishing_marks or "—" }}</dd>
+    <dt>İlk görüldü</dt><dd>{{ notice.first_seen_at.strftime("%d.%m.%Y") }}</dd>
+    <dt>Son görüldü</dt><dd>{{ notice.last_seen_at.strftime("%d.%m.%Y") }}</dd>
+  </dl>
+{% endblock %}
+
+{% block content %}
+  <section>
+    <h1>Fotoğraflar</h1>
+    {% if notice.photos %}
+      <div class="photos">
+        {% for photo in notice.photos %}
+          {# The boxes are in pixels of the original image; faces.js turns them into
+             percentages once the browser knows the image's real size. #}
+          <figure class="photo-frame">
+            <div class="frame">
+              <img src="/photos/{{ photo.photo_id }}" alt="Fotoğraf {{ loop.index }}" loading="lazy">
+              {% for face in photo.faces %}
+                <span class="face-box" hidden data-face-id="{{ face.face_id }}"
+                      data-x="{{ face.x }}" data-y="{{ face.y }}"
+                      data-width="{{ face.width }}" data-height="{{ face.height }}"
+                      title="Yüz · tespit skoru {{ '%.2f'|format(face.detection_score) }}"></span>
+              {% endfor %}
+            </div>
+            <figcaption class="muted small">
+              {{ photo.faces | length }} yüz bulundu
+            </figcaption>
+          </figure>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">İndirilmiş fotoğraf yok.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Arama emirleri</h2>
+    {% if notice.warrants %}
+      <table class="table">
+        <thead><tr><th>Kararı veren ülke</th><th>Suç</th></tr></thead>
+        <tbody>
+          {% for warrant in notice.warrants %}
+            <tr>
+              <td>{{ country(warrant.country) }}</td>
+              <td>
+                {{ warrant.charge }}
+                {% if warrant.charge_translation %}
+                  <div class="muted small">{{ warrant.charge_translation }}</div>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Arama emri bilgisi yok.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Olası yüz eşleşmeleri</h2>
+    {# ADR 0012: a similar face is only a lead for a person to check, never an
+       identification. #}
+    <p class="muted small">Benzer görünen yüzler yalnızca bir kişinin incelemesi için
+      gösterilir; aynı kişi oldukları anlamına gelmez.</p>
+    {% if notice.matches %}
+      <table class="table">
+        <thead><tr><th>Diğer kayıt</th><th>Benzerlik</th></tr></thead>
+        <tbody>
+          {% for match in notice.matches %}
+            <tr data-face-id="{{ match.face_id }}">
+              <td>
+                <a href="{{ url_for('notice_page', notice_id=match.other_notice_id) }}">
+                  {{ match.other_forename or "" }} {{ match.other_name }}</a>
+                <span class="muted small">{{ match.other_entity_id }}</span>
+                {% if match.other_removed %}<span class="badge removed">kaldırıldı</span>{% endif %}
+              </td>
+              <td>%{{ "%.0f"|format(match.similarity * 100) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">Olası eşleşme yok.</p>
+    {% endif %}
+  </section>
+
+  <script src="{{ url_for('static', path='faces.js') }}" defer></script>
+{% endblock %}

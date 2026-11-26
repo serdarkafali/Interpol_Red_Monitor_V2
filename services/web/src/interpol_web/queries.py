@@ -1,25 +1,30 @@
-"""Read-only queries of the notice list page (ADR 0013).
+"""Read-only queries of the notice list and detail pages (ADR 0013).
 
 One search runs three kinds of query on the same snapshot of the database: the notices
 of the current page, the total number of matching notices and the counts shown next to
 every option of the sidebar (facets). A facet ignores its own filter, so the other
 options of the same group keep their counts and stay clickable, like on sahibinden.com.
-The web service connects with the read-only database user; nothing here writes.
+The detail page reads one notice with its countries, warrants, photo faces and possible
+face matches. The web service connects with the read-only database user; nothing here
+writes.
 """
 
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     ColumnElement,
     Connection,
     Select,
+    case,
     func,
     or_,
     select,
 )
+from sqlalchemy.orm import aliased
 
 from interpol_db import ArrestWarrant, Country, Face, FaceMatch, Notice, NoticePhoto
 from interpol_db import notice_nationalities as nationalities
@@ -70,6 +75,90 @@ class SearchResult:
     issuers: tuple[FacetOption, ...]
 
 
+@dataclass(frozen=True)
+class CountryName:
+    """A country code with its name; the name is missing for codes Interpol never named."""
+
+    code: str
+    name: str | None
+
+
+@dataclass(frozen=True)
+class Warrant:
+    """One arrest warrant of a notice."""
+
+    country: CountryName
+    charge: str
+    charge_translation: str | None
+
+
+@dataclass(frozen=True)
+class FaceBox:
+    """A face found on a photo, in pixels of the original image."""
+
+    face_id: int
+    x: int
+    y: int
+    width: int
+    height: int
+    detection_score: float
+
+
+@dataclass(frozen=True)
+class PhotoFaces:
+    """A downloaded photo of the notice and the faces found on it."""
+
+    photo_id: int
+    faces: tuple[FaceBox, ...]
+
+
+@dataclass(frozen=True)
+class PossibleMatch:
+    """A face of this notice that looks like a face of another notice.
+
+    Only a lead for a human to check, never an identification (ADR 0012).
+    """
+
+    face_id: int
+    other_face_id: int
+    other_photo_id: int
+    other_notice_id: int
+    other_entity_id: str
+    other_name: str
+    other_forename: str | None
+    other_removed: bool
+    # 1 - cosine distance; 0.443 is the threshold of ADR 0012, 1 the same direction.
+    similarity: float
+
+
+@dataclass(frozen=True)
+class NoticeDetail:
+    """Everything the detail page shows about one notice."""
+
+    id: int
+    entity_id: str
+    name: str
+    forename: str | None
+    sex: str | None
+    date_of_birth: date | None
+    age: int | None
+    place_of_birth: str | None
+    country_of_birth: CountryName | None
+    height: Decimal | None
+    weight: int | None
+    distinguishing_marks: str | None
+    languages: tuple[str, ...]
+    eye_colors: tuple[str, ...]
+    hair_colors: tuple[str, ...]
+    first_seen_at: datetime
+    last_seen_at: datetime
+    removed_at: datetime | None
+    nationalities: tuple[CountryName, ...]
+    warrants: tuple[Warrant, ...]
+    photos: tuple[PhotoFaces, ...]
+    matches: tuple[PossibleMatch, ...]
+
+
 class NoticeQueries:
     """Runs the searches of the list page, each on its own connection."""
 
@@ -93,6 +182,14 @@ class NoticeQueries:
                 nationalities=_country_facet(connection, filters, today, NATIONALITY),
                 issuers=_country_facet(connection, filters, today, ISSUER),
             )
+
+    def notice(self, notice_id: int) -> NoticeDetail | None:
+        """Return one notice with everything around it, or None if there is no such id."""
+        today = self._today()
+        with self._connect() as connection:
+            # The same snapshot for the notice and its warrants, photos and matches.
+            connection.execution_options(isolation_level="REPEATABLE READ")
+            return _notice_detail(connection, notice_id, today)
 
 
 def _conditions(
@@ -330,3 +427,165 @@ def _country_facet(
         FacetOption(value=code, label=code, count=0) for code in selected if code not in listed
     ]
     return tuple(options)
+
+
+def _notice_detail(connection: Connection, notice_id: int, today: date) -> NoticeDetail | None:
+    """The notice row and the four lists around it."""
+    # A Connection returns plain rows, not ORM objects, so the columns are named one by one.
+    row = connection.execute(
+        select(
+            Notice.entity_id,
+            Notice.name,
+            Notice.forename,
+            Notice.sex_id,
+            Notice.date_of_birth,
+            Notice.place_of_birth,
+            Notice.country_of_birth_code,
+            Country.name.label("country_of_birth_name"),
+            Notice.height,
+            Notice.weight,
+            Notice.distinguishing_marks,
+            Notice.language_codes,
+            Notice.eye_color_codes,
+            Notice.hair_color_codes,
+            Notice.created_at,
+            Notice.last_seen_at,
+            Notice.deleted_at,
+        )
+        .outerjoin(Country, Country.code == Notice.country_of_birth_code)
+        .where(Notice.id == notice_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    return NoticeDetail(
+        id=notice_id,
+        entity_id=row.entity_id,
+        name=row.name,
+        forename=row.forename,
+        sex=row.sex_id,
+        date_of_birth=row.date_of_birth,
+        age=_age(row.date_of_birth, today),
+        place_of_birth=row.place_of_birth,
+        country_of_birth=(
+            CountryName(row.country_of_birth_code, row.country_of_birth_name)
+            if row.country_of_birth_code
+            else None
+        ),
+        height=row.height,
+        weight=row.weight,
+        distinguishing_marks=row.distinguishing_marks,
+        languages=tuple(row.language_codes),
+        eye_colors=tuple(row.eye_color_codes),
+        hair_colors=tuple(row.hair_color_codes),
+        first_seen_at=row.created_at,
+        last_seen_at=row.last_seen_at,
+        removed_at=row.deleted_at,
+        nationalities=_notice_nationalities(connection, notice_id),
+        warrants=_warrants(connection, notice_id),
+        photos=_photo_faces(connection, notice_id),
+        matches=_possible_matches(connection, notice_id),
+    )
+
+
+def _notice_nationalities(connection: Connection, notice_id: int) -> tuple[CountryName, ...]:
+    rows = connection.execute(
+        select(nationalities.c.country_code, Country.name)
+        .join(Country, Country.code == nationalities.c.country_code)
+        .where(nationalities.c.notice_id == notice_id)
+        .order_by(nationalities.c.country_code)
+    ).all()
+    return tuple(CountryName(code, name) for code, name in rows)
+
+
+def _warrants(connection: Connection, notice_id: int) -> tuple[Warrant, ...]:
+    rows = connection.execute(
+        select(
+            ArrestWarrant.issuing_country_code,
+            Country.name,
+            ArrestWarrant.charge,
+            ArrestWarrant.charge_translation,
+        )
+        .join(Country, Country.code == ArrestWarrant.issuing_country_code)
+        .where(ArrestWarrant.notice_id == notice_id)
+        .order_by(ArrestWarrant.id)
+    ).all()
+    return tuple(
+        Warrant(CountryName(code, name), charge, translation)
+        for code, name, charge, translation in rows
+    )
+
+
+def _photo_faces(connection: Connection, notice_id: int) -> tuple[PhotoFaces, ...]:
+    """The downloaded photos in id order, each with its faces; photos without faces too."""
+    rows = connection.execute(
+        select(
+            NoticePhoto.id,
+            Face.id,
+            Face.box_x,
+            Face.box_y,
+            Face.box_width,
+            Face.box_height,
+            Face.detection_score,
+        )
+        .outerjoin(Face, Face.photo_id == NoticePhoto.id)
+        .where(NoticePhoto.notice_id == notice_id, NoticePhoto.downloaded_at.is_not(None))
+        .order_by(NoticePhoto.id, Face.id)
+    ).all()
+    faces: dict[int, list[FaceBox]] = {}
+    for photo_id, face_id, x, y, width, height, score in rows:
+        boxes = faces.setdefault(photo_id, [])
+        if face_id is not None:
+            boxes.append(FaceBox(face_id, x, y, width, height, score))
+    return tuple(PhotoFaces(photo_id, tuple(boxes)) for photo_id, boxes in faces.items())
+
+
+def _possible_matches(connection: Connection, notice_id: int) -> tuple[PossibleMatch, ...]:
+    """Faces of other notices saved as close to a face of this notice, closest first."""
+    own_face = aliased(Face)
+    own_photo = aliased(NoticePhoto)
+    other_face = aliased(Face)
+    other_photo = aliased(NoticePhoto)
+    # A pair is saved once with the smaller face id first, so this notice's face can be
+    # on either side; the other side is the other notice's face.
+    other_face_id = case(
+        (FaceMatch.first_face_id == own_face.id, FaceMatch.second_face_id),
+        else_=FaceMatch.first_face_id,
+    )
+    rows = connection.execute(
+        select(
+            own_face.id,
+            other_face.id,
+            other_photo.id,
+            Notice.id,
+            Notice.entity_id,
+            Notice.name,
+            Notice.forename,
+            Notice.deleted_at,
+            FaceMatch.distance,
+        )
+        .select_from(own_photo)
+        .join(own_face, own_face.photo_id == own_photo.id)
+        .join(
+            FaceMatch,
+            or_(FaceMatch.first_face_id == own_face.id, FaceMatch.second_face_id == own_face.id),
+        )
+        .join(other_face, other_face.id == other_face_id)
+        .join(other_photo, other_photo.id == other_face.photo_id)
+        .join(Notice, Notice.id == other_photo.notice_id)
+        .where(own_photo.notice_id == notice_id, FaceMatch.same_notice.is_(False))
+        .order_by(FaceMatch.distance, other_face.id)
+    ).all()
+    return tuple(
+        PossibleMatch(
+            face_id=row[0],
+            other_face_id=row[1],
+            other_photo_id=row[2],
+            other_notice_id=row[3],
+            other_entity_id=row.entity_id,
+            other_name=row.name,
+            other_forename=row.forename,
+            other_removed=row.deleted_at is not None,
+            similarity=1 - row.distance,
+        )
+        for row in rows
+    )
