@@ -14,6 +14,12 @@ VARIABLES = (
     "WEB_LOG_LEVEL",
     "WEB_LOG_FORMAT",
     "DATABASE_URL",
+    "WEB_STORAGE_ACCESS_KEY",
+    "WEB_STORAGE_SECRET_KEY",
+    "WEB_STORAGE_ENDPOINT_URL",
+    "WEB_STORAGE_BUCKET",
+    "STORAGE_ACCESS_KEY",
+    "STORAGE_SECRET_KEY",
 )
 
 
@@ -29,6 +35,8 @@ def required(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("WEB_DATABASE_URL", "postgresql+psycopg://web:made-up@db/interpol")
     monkeypatch.setenv("WEB_USERNAME", "admin")
     monkeypatch.setenv("WEB_PASSWORD", "made-up-password")
+    monkeypatch.setenv("STORAGE_ACCESS_KEY", "made-up-key")
+    monkeypatch.setenv("STORAGE_SECRET_KEY", "made-up-secret")
 
 
 @pytest.mark.usefixtures("required")
@@ -66,3 +74,21 @@ def test_an_invalid_port_stops_the_start(monkeypatch: pytest.MonkeyPatch, port: 
 
     with pytest.raises(ValidationError, match="port"):
         WebSettings()
+
+
+@pytest.mark.usefixtures("required")
+def test_the_store_keys_fall_back_to_the_shared_ones() -> None:
+    settings = WebSettings()
+
+    assert settings.storage_access_key.get_secret_value() == "made-up-key"
+    assert (settings.storage_endpoint_url, settings.storage_bucket) == (
+        "http://localhost:8333",
+        "notice-photos",
+    )
+
+
+@pytest.mark.usefixtures("required")
+def test_own_store_keys_win_over_the_shared_ones(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WEB_STORAGE_ACCESS_KEY", "own-key")
+
+    assert WebSettings().storage_access_key.get_secret_value() == "own-key"

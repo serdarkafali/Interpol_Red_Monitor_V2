@@ -1,5 +1,6 @@
 """Tests of the pages with a made-up reader: no database is needed."""
 
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -24,6 +25,7 @@ from interpol_web.queries import (
 from interpol_web.routes import page_count, page_url
 
 AUTH = ("admin", "made-up-password")
+FAKE_JPEG = b"\xff\xd8\xff made-up photo"
 
 
 class RecordingSearch:
@@ -35,22 +37,40 @@ class RecordingSearch:
         self.asked: list[NoticeFilters] = []
         self.asked_ids: list[int] = []
 
-    def notice(self, notice_id: int) -> NoticeDetail | None:
-        self.asked_ids.append(notice_id)
-        return self.detail
-
     def search(self, filters: NoticeFilters) -> SearchResult:
         self.asked.append(filters)
         return SearchResult(cards=(), total=self.total, sexes=(), nationalities=(), issuers=())
 
+    def notice(self, notice_id: int) -> NoticeDetail | None:
+        self.asked_ids.append(notice_id)
+        return self.detail
 
-def client_for(search: RecordingSearch) -> TestClient:
+    def photo_key(self, photo_id: int) -> str | None:
+        """Photo 11 is downloaded, every other id is unknown."""
+        return "notices/2026-777/pic" if photo_id == 11 else None
+
+
+class FakePhotos:
+    """Holds one made-up photo; remembers which keys it was asked for."""
+
+    def __init__(self, stored: dict[str, bytes] | None = None) -> None:
+        self.stored = stored if stored is not None else {"notices/2026-777/pic": FAKE_JPEG}
+        self.asked: list[str] = []
+
+    def get(self, key: str) -> bytes | None:
+        self.asked.append(key)
+        return self.stored.get(key)
+
+
+def client_for(search: RecordingSearch, photos: FakePhotos | None = None) -> TestClient:
     settings = WebSettings(
         database_url=SecretStr("postgresql+psycopg://web:made-up@db/interpol"),
         username=AUTH[0],
         password=SecretStr(AUTH[1]),
+        WEB_STORAGE_ACCESS_KEY="made-up-key",
+        WEB_STORAGE_SECRET_KEY="made-up-secret",
     )
-    return TestClient(create_app(settings, search))
+    return TestClient(create_app(settings, search, photos or FakePhotos()))
 
 
 def test_the_filters_of_the_url_reach_the_search() -> None:
@@ -212,7 +232,7 @@ def test_the_detail_page_shows_the_notice() -> None:
     assert search.asked_ids == [7]
     assert "JOHN DOE" in html
     assert "made-up charge" in html
-    assert 'src="/photos/11"' in html
+    assert 'src="http://testserver/photos/11"' in html
     assert 'data-x="10" data-y="20"' in html
     assert 'href="http://testserver/notices/8"' in html
     assert "%63" in html
@@ -236,3 +256,52 @@ def test_a_card_links_to_its_detail_page() -> None:
     html = client_for(FixedSearch()).get("/", auth=AUTH).text
 
     assert 'href="http://testserver/notices/1"' in html
+
+
+def test_a_photo_is_handed_out_as_jpeg() -> None:
+    photos = FakePhotos()
+
+    response = client_for(RecordingSearch(), photos).get("/photos/11", auth=AUTH)
+
+    assert response.status_code == 200
+    assert response.content == FAKE_JPEG
+    assert response.headers["Content-Type"] == "image/jpeg"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Cache-Control"] == "no-store"
+    assert photos.asked == ["notices/2026-777/pic"]
+
+
+def test_an_unknown_photo_is_not_found_and_the_store_is_not_asked() -> None:
+    photos = FakePhotos()
+
+    response = client_for(RecordingSearch(), photos).get("/photos/12", auth=AUTH)
+
+    assert response.status_code == 404
+    assert photos.asked == []
+
+
+def test_a_photo_missing_from_the_store_is_not_found() -> None:
+    response = client_for(RecordingSearch(), FakePhotos(stored={})).get("/photos/11", auth=AUTH)
+
+    assert response.status_code == 404
+
+
+def test_a_photo_needs_the_login_too() -> None:
+    photos = FakePhotos()
+
+    assert client_for(RecordingSearch(), photos).get("/photos/11").status_code == 401
+    assert photos.asked == []
+
+
+class PhotoCardSearch(RecordingSearch):
+    """Answers with one card whose photo is downloaded."""
+
+    def search(self, filters: NoticeFilters) -> SearchResult:
+        result = a_result()
+        return replace(result, cards=(replace(result.cards[0], photo_id=11),))
+
+
+def test_a_card_with_a_photo_shows_it() -> None:
+    html = client_for(PhotoCardSearch()).get("/", auth=AUTH).text
+
+    assert '<img src="http://testserver/photos/11"' in html

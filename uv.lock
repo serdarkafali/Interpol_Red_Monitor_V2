@@ -928,6 +928,8 @@ name = "interpol-web"
 version = "0.1.0"
 source = { editable = "services/web" }
 dependencies = [
+    { name = "boto3" },
+    { name = "botocore" },
     { name = "fastapi" },
     { name = "interpol-db" },
     { name = "interpol-observability" },
@@ -940,6 +942,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "boto3", specifier = ">=1.44.9" },
+    { name = "botocore", specifier = ">=1.44.9" },
     { name = "fastapi", specifier = ">=0.165.0" },
     { name = "interpol-db", editable = "libs/db" },
     { name = "interpol-observability", editable = "libs/observability" },

@@ -50,7 +50,7 @@
              percentages once the browser knows the image's real size. #}
           <figure class="photo-frame">
             <div class="frame">
-              <img src="/photos/{{ photo.photo_id }}" alt="Fotoğraf {{ loop.index }}" loading="lazy">
+              <img src="{{ url_for('photo', photo_id=photo.photo_id) }}" alt="Fotoğraf {{ loop.index }}" loading="lazy">
               {% for face in photo.faces %}
                 <span class="face-box" hidden data-face-id="{{ face.face_id }}"
                       data-x="{{ face.x }}" data-y="{{ face.y }}"

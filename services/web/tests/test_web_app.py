@@ -22,6 +22,14 @@ class EmptyReader:
     def notice(self, notice_id: int) -> NoticeDetail | None:
         return None
 
+    def photo_key(self, photo_id: int) -> str | None:
+        return None
+
+
+class NoPhotos:
+    def get(self, key: str) -> bytes | None:
+        return None
+
 
 @pytest.fixture
 def client() -> TestClient:
@@ -29,8 +37,10 @@ def client() -> TestClient:
         database_url=SecretStr("postgresql+psycopg://web:made-up@db/interpol"),
         username=USER,
         password=SecretStr(PASSWORD),
+        WEB_STORAGE_ACCESS_KEY="made-up-key",
+        WEB_STORAGE_SECRET_KEY="made-up-secret",
     )
-    return TestClient(create_app(settings, EmptyReader()))
+    return TestClient(create_app(settings, EmptyReader(), NoPhotos()))
 
 
 def test_a_page_without_credentials_asks_the_browser_to_log_in(client: TestClient) -> None:
