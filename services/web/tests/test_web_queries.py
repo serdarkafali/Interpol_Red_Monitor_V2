@@ -129,7 +129,7 @@ def add_notice(
     return notice_id
 
 
-def add_face(engine: Engine, notice_id: int, picture_id: str) -> int:
+def add_face(engine: Engine, notice_id: int, picture_id: str, *, x: int = 0) -> int:
     """Insert a downloaded photo with one made-up face; return the face id."""
     vector = [1 / math.sqrt(EMBEDDING_DIMENSIONS)] * EMBEDDING_DIMENSIONS
     with engine.begin() as connection:
@@ -142,7 +142,7 @@ def add_face(engine: Engine, notice_id: int, picture_id: str) -> int:
             insert(Face)
             .values(
                 photo_id=photo_id,
-                box_x=0,
+                box_x=x,
                 box_y=0,
                 box_width=50,
                 box_height=50,
@@ -155,13 +155,15 @@ def add_face(engine: Engine, notice_id: int, picture_id: str) -> int:
     return face_id
 
 
-def add_match(engine: Engine, face_a: int, face_b: int, *, same_notice: bool) -> None:
+def add_match(
+    engine: Engine, face_a: int, face_b: int, *, same_notice: bool, distance: float = 0.3
+) -> None:
     with engine.begin() as connection:
         connection.execute(
             insert(FaceMatch).values(
                 first_face_id=min(face_a, face_b),
                 second_face_id=max(face_a, face_b),
-                distance=0.3,
+                distance=distance,
                 same_notice=same_notice,
             )
         )
@@ -395,3 +397,78 @@ def test_a_search_reads_one_snapshot(engine: Engine) -> None:
     NoticeQueries(connect, today=lambda: TODAY).search(NoticeFilters())
 
     assert seen == ["REPEATABLE READ"]
+
+
+def test_an_unknown_notice_gives_none(queries: NoticeQueries) -> None:
+    assert queries.notice(123456) is None
+
+
+def test_the_detail_has_the_notice_and_its_countries(
+    engine: Engine, queries: NoticeQueries
+) -> None:
+    notice_id = add_notice(
+        engine,
+        "2026/1",
+        name="DOE",
+        forename="JOHN",
+        sex="M",
+        born=date(1990, 11, 27),
+        nationalities=("RU", "DE"),
+        issuers=("US",),
+    )
+
+    detail = queries.notice(notice_id)
+
+    assert detail is not None
+    assert (detail.entity_id, detail.name, detail.forename, detail.sex) == (
+        "2026/1",
+        "DOE",
+        "JOHN",
+        "M",
+    )
+    assert detail.age == 35
+    assert detail.removed_at is None
+    assert [c.code for c in detail.nationalities] == ["DE", "RU"]
+    assert detail.nationalities[0].name == "Country DE"
+    assert [(w.country.code, w.charge) for w in detail.warrants] == [("US", "made up")]
+
+
+def test_photos_come_with_their_faces_and_photos_without_faces_too(
+    engine: Engine, queries: NoticeQueries
+) -> None:
+    notice_id = add_notice(engine, "2026/1", photo=True)
+    face_a = add_face(engine, notice_id, "with-face-a", x=5)
+
+    detail = queries.notice(notice_id)
+
+    assert detail is not None
+    assert [len(photo.faces) for photo in detail.photos] == [0, 1]
+    (face,) = detail.photos[1].faces
+    assert (face.face_id, face.x, face.width, face.height) == (face_a, 5, 50, 50)
+
+
+def test_possible_matches_are_other_notices_closest_first(
+    engine: Engine, queries: NoticeQueries
+) -> None:
+    own = add_notice(engine, "2026/1")
+    near = add_notice(engine, "2026/2", name="NEAR")
+    far = add_notice(engine, "2026/3", name="FAR", removed=True)
+    own_face = add_face(engine, own, "own")
+    second_own_face = add_face(engine, own, "own-2")
+    near_face = add_face(engine, near, "near")
+    far_face = add_face(engine, far, "far")
+    # The own face is once the first and once the second of a pair.
+    add_match(engine, own_face, far_face, same_notice=False, distance=0.5)
+    add_match(engine, near_face, own_face, same_notice=False, distance=0.2)
+    add_match(engine, own_face, second_own_face, same_notice=True, distance=0.1)
+
+    detail = queries.notice(own)
+
+    assert detail is not None
+    assert [(m.other_notice_id, m.other_name, m.other_removed) for m in detail.matches] == [
+        (near, "NEAR", False),
+        (far, "FAR", True),
+    ]
+    assert [m.face_id for m in detail.matches] == [own_face, own_face]
+    assert [m.other_face_id for m in detail.matches] == [near_face, far_face]
+    assert detail.matches[0].similarity == pytest.approx(0.8)
