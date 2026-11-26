@@ -181,6 +181,39 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  web:
+    # The web interface (ADR 0013): reads the database as the read-only "web" user that
+    # migrate creates, and the photos from the object store. Published on 127.0.0.1
+    # only, so not even the local network can reach it.
+    build:
+      context: .
+      dockerfile: services/web/Dockerfile
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      storage-init:
+        condition: service_completed_successfully
+    environment:
+      WEB_DATABASE_URL: postgresql+psycopg://${WEB_DATABASE_USER:-web}:${WEB_DATABASE_PASSWORD:?set WEB_DATABASE_PASSWORD in .env}@postgres:5432/${POSTGRES_DB}
+      WEB_USERNAME: ${WEB_USERNAME:?set WEB_USERNAME in .env}
+      WEB_PASSWORD: ${WEB_PASSWORD:?set WEB_PASSWORD in .env}
+      # Inside the container the server must listen on every interface; the port
+      # mapping below keeps it on the host's 127.0.0.1.
+      WEB_HOST: 0.0.0.0
+      WEB_STORAGE_ENDPOINT_URL: http://seaweedfs:8333
+      WEB_STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+      WEB_STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+      WEB_LOG_LEVEL: ${WEB_LOG_LEVEL:-INFO}
+      WEB_LOG_FORMAT: json
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   seaweedfs:
     # S3-compatible object store for the notice photos (ADR 0011). "server -s3" runs
     # the master, a volume server, the filer and the S3 gateway in one process.

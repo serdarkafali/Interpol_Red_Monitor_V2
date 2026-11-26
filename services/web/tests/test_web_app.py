@@ -88,3 +88,16 @@ def test_the_stylesheet_is_served(client: TestClient) -> None:
 @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
 def test_there_is_no_api_documentation(client: TestClient, path: str) -> None:
     assert client.get(path, auth=(USER, PASSWORD)).status_code == 404
+
+
+def test_the_health_check_needs_no_login_and_shows_no_data(client: TestClient) -> None:
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.text == "ok"
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+@pytest.mark.parametrize("path", ["/", "/matches", "/notices/1", "/photos/1"])
+def test_every_page_and_photo_asks_for_the_login(client: TestClient, path: str) -> None:
+    assert client.get(path).status_code == 401

@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Response
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -30,8 +31,6 @@ def create_app(settings: WebSettings, reader: NoticeReader, photos: PhotoSource)
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
-        # The login check runs before every page.
-        dependencies=[Depends(require_login(settings))],
     )
     # CSS and scripts. Mounted files skip the login check; they hold no personal data.
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
@@ -45,5 +44,14 @@ def create_app(settings: WebSettings, reader: NoticeReader, photos: PhotoSource)
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    app.include_router(create_router(reader, photos, templates))
+    @app.get("/healthz", response_class=PlainTextResponse)
+    def healthz() -> str:
+        """For Docker's health check: no login, no data, no database call."""
+        return "ok"
+
+    # The login check runs before every page and photo of the router.
+    app.include_router(
+        create_router(reader, photos, templates),
+        dependencies=[Depends(require_login(settings))],
+    )
     return app
