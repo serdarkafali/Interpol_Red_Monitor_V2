@@ -83,15 +83,19 @@ services:
 
   migrate:
     # Runs once after PostgreSQL is healthy and applies the Alembic migrations, so that
-    # no service needs the right to change the schema (ADR 0004, ADR 0008).
+    # no service needs the right to change the schema (ADR 0004, ADR 0008). Then it creates
+    # the web interface's read-only login user (ADR 0013); skipped without its password.
     build:
       context: .
       dockerfile: libs/db/Dockerfile
+    command: ["sh", "-c", "alembic upgrade head && python -m interpol_db.reader_user"]
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      WEB_DATABASE_USER: ${WEB_DATABASE_USER:-web}
+      WEB_DATABASE_PASSWORD: ${WEB_DATABASE_PASSWORD:-}
     restart: "no"
 
   collector:
