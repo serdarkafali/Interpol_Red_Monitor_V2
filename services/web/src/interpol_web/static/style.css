@@ -126,6 +126,7 @@ a:hover { text-decoration: underline; }
 .detail-name { margin: 12px 0 2px; }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
 .badge.removed { color: #8a1c1c; background: #fde8e8; }
+.badge.warn { color: #8a5a00; background: #fff4d6; }
 .facts-list { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 16px 0 0; font-size: 14px; }
 .facts-list dt { color: var(--muted); }
 .facts-list dd { margin: 0; }
@@ -141,6 +142,21 @@ a:hover { text-decoration: underline; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th, .table td { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .table th { color: var(--muted); font-weight: 600; }
+
+/* Possible match pairs: the two faces side by side with the similarity between. */
+.pairs { margin: 0; padding: 0; list-style: none; }
+.pair {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.match-side { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.match-side .frame img { max-width: 240px; max-height: 260px; }
+.pair-score { text-align: center; }
+.pair-score .score { font-size: 22px; font-weight: 600; }
 
 /* Narrow screens: the sidebar goes above the results. */
 @media (max-width: 800px) {

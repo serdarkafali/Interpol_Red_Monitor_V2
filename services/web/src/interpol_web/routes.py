@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from interpol_web.filters import MAX_PAGE, PAGE_SIZE, NoticeFilters
-from interpol_web.queries import NoticeDetail, SearchResult
+from interpol_web.queries import MatchPage, NoticeDetail, SearchResult
 
 # The face worker stores every photo as JPEG (ADR 0011).
 PHOTO_CONTENT_TYPE = "image/jpeg"
@@ -28,6 +28,8 @@ class NoticeReader(Protocol):
     def notice(self, notice_id: int) -> NoticeDetail | None: ...
 
     def photo_key(self, photo_id: int) -> str | None: ...
+
+    def matches(self, page: int) -> MatchPage: ...
 
 
 class PhotoSource(Protocol):
@@ -69,6 +71,18 @@ def create_router(
         if notice is None:
             raise HTTPException(status_code=404)
         return templates.TemplateResponse(request, "notice.html", {"notice": notice})
+
+    @router.get("/matches", response_class=HTMLResponse)
+    def matches_page(
+        request: Request, page: Annotated[int, Query(ge=1, le=MAX_PAGE)] = 1
+    ) -> HTMLResponse:
+        """Pairs of faces of different notices that look alike, most alike first."""
+        result = reader.matches(page)
+        return templates.TemplateResponse(
+            request,
+            "matches.html",
+            {"result": result, "page": page, "page_count": page_count(result.total)},
+        )
 
     @router.get("/photos/{photo_id}")
     def photo(photo_id: Id) -> Response:

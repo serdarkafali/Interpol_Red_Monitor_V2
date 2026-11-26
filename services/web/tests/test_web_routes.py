@@ -15,8 +15,12 @@ from interpol_web.queries import (
     CountryName,
     FaceBox,
     FacetOption,
+    MatchPage,
+    MatchPair,
+    MatchSide,
     NoticeCard,
     NoticeDetail,
+    OwnComparison,
     PhotoFaces,
     PossibleMatch,
     SearchResult,
@@ -36,6 +40,7 @@ class RecordingSearch:
         self.detail = detail
         self.asked: list[NoticeFilters] = []
         self.asked_ids: list[int] = []
+        self.asked_pages: list[int] = []
 
     def search(self, filters: NoticeFilters) -> SearchResult:
         self.asked.append(filters)
@@ -48,6 +53,10 @@ class RecordingSearch:
     def photo_key(self, photo_id: int) -> str | None:
         """Photo 11 is downloaded, every other id is unknown."""
         return "notices/2026-777/pic" if photo_id == 11 else None
+
+    def matches(self, page: int) -> MatchPage:
+        self.asked_pages.append(page)
+        return a_match_page()
 
 
 class FakePhotos:
@@ -219,6 +228,10 @@ def a_detail() -> NoticeDetail:
                 similarity=0.634,
             ),
         ),
+        own_comparisons=(
+            OwnComparison(first_photo_id=11, second_photo_id=13, similarity=0.21),
+            OwnComparison(first_photo_id=11, second_photo_id=11, similarity=0.88),
+        ),
     )
 
 
@@ -305,3 +318,63 @@ def test_a_card_with_a_photo_shows_it() -> None:
     html = client_for(PhotoCardSearch()).get("/", auth=AUTH).text
 
     assert '<img src="http://testserver/photos/11"' in html
+
+
+def a_match_page() -> MatchPage:
+    """A made-up page with one pair of 30, so there are two pages."""
+
+    def side(notice_id: int, entity_id: str, name: str, *, removed: bool = False) -> MatchSide:
+        return MatchSide(
+            notice_id=notice_id,
+            entity_id=entity_id,
+            name=name,
+            forename=None,
+            removed=removed,
+            photo_id=notice_id * 10,
+            box=FaceBox(notice_id * 100, 1, 2, 3, 4, 0.9),
+        )
+
+    pair = MatchPair(
+        first=side(1, "2026/111", "DOE"),
+        second=side(2, "2026/222", "ROE", removed=True),
+        similarity=0.61,
+    )
+    return MatchPage(pairs=(pair,), total=30)
+
+
+def test_the_match_page_shows_pairs_side_by_side() -> None:
+    search = RecordingSearch()
+
+    response = client_for(search).get("/matches", auth=AUTH)
+    html = response.text
+
+    assert response.status_code == 200
+    assert search.asked_pages == [1]
+    assert "DOE" in html
+    assert "ROE" in html
+    assert "%61" in html
+    assert 'src="http://testserver/photos/10"' in html
+    assert 'data-face-id="200"' in html
+    assert 'href="http://testserver/notices/2"' in html
+    assert 'href="?page=2"' in html
+
+
+@pytest.mark.parametrize("page", ["0", "-1", "abc", str(MAX_PAGE + 1)])
+def test_a_wrong_match_page_is_refused(page: str) -> None:
+    search = RecordingSearch()
+
+    assert client_for(search).get(f"/matches?page={page}", auth=AUTH).status_code == 422
+    assert search.asked_pages == []
+
+
+def test_the_menu_links_to_the_match_page() -> None:
+    html = client_for(RecordingSearch()).get("/", auth=AUTH).text
+
+    assert 'href="http://testserver/matches"' in html
+
+
+def test_own_photos_that_may_differ_are_marked() -> None:
+    html = client_for(RecordingSearch(detail=a_detail())).get("/notices/7", auth=AUTH).text
+
+    assert "%21" in html
+    assert html.count("badge warn") == 1

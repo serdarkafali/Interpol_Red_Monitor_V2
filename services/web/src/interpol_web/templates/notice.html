@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{# "with context": the macro needs url_for, which lives in the page context. #}
+{% from "_faces.html" import photo_frame with context %}
 
 {% set sex_labels = {"M": "Erkek", "F": "Kadın", "U": "Bilinmiyor"} %}
 {% macro country(c) %}{{ c.name or c.code }}{% endmacro %}
@@ -46,20 +48,10 @@
     {% if notice.photos %}
       <div class="photos">
         {% for photo in notice.photos %}
-          {# The boxes are in pixels of the original image; faces.js turns them into
-             percentages once the browser knows the image's real size. #}
-          <figure class="photo-frame">
-            <div class="frame">
-              <img src="{{ url_for('photo', photo_id=photo.photo_id) }}" alt="Fotoğraf {{ loop.index }}" loading="lazy">
-              {% for face in photo.faces %}
-                <span class="face-box" hidden data-face-id="{{ face.face_id }}"
-                      data-x="{{ face.x }}" data-y="{{ face.y }}"
-                      data-width="{{ face.width }}" data-height="{{ face.height }}"
-                      title="Yüz · tespit skoru {{ '%.2f'|format(face.detection_score) }}"></span>
-              {% endfor %}
-            </div>
+          <figure class="photo-frame" id="photo-{{ photo.photo_id }}">
+            {{ photo_frame(photo.photo_id, photo.faces, "Fotoğraf " ~ loop.index) }}
             <figcaption class="muted small">
-              {{ photo.faces | length }} yüz bulundu
+              Fotoğraf {{ loop.index }} · {{ photo.faces | length }} yüz bulundu
             </figcaption>
           </figure>
         {% endfor %}
@@ -68,6 +60,36 @@
       <p class="muted">İndirilmiş fotoğraf yok.</p>
     {% endif %}
   </section>
+
+  {% if notice.own_comparisons %}
+    {# Photo numbers as shown under the photos above. #}
+    {% set numbers = {} %}
+    {% for photo in notice.photos %}{% set _ = numbers.update({photo.photo_id: loop.index}) %}{% endfor %}
+    <section>
+      <h2>Kendi fotoğrafları birbirine benziyor mu?</h2>
+      <p class="muted small">Aynı kayıttaki fotoğraflardaki yüzler birbiriyle karşılaştırılır.
+        Benzerliği %{{ "%.0f"|format(match_threshold * 100) }}'ün altında kalan çiftler aynı kişiyi
+        göstermiyor olabilir; bir kişinin kontrol etmesi gerekir.</p>
+      <table class="table">
+        <thead><tr><th>Fotoğraflar</th><th>Benzerlik</th><th></th></tr></thead>
+        <tbody>
+          {% for pair in notice.own_comparisons %}
+            <tr>
+              <td>Fotoğraf {{ numbers.get(pair.first_photo_id, "?") }} – Fotoğraf {{ numbers.get(pair.second_photo_id, "?") }}</td>
+              <td>%{{ "%.0f"|format(pair.similarity * 100) }}</td>
+              <td>
+                {% if pair.may_differ %}
+                  <span class="badge warn">Aynı kişi olmayabilir</span>
+                {% else %}
+                  <span class="muted small">Benzer</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
 
   <section>
     <h2>Arama emirleri</h2>

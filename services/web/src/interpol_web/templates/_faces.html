@@ -1,0 +1,13 @@
+{# A photo with face boxes. The boxes are in pixels of the original image; faces.js
+   turns them into percentages once the browser knows the image's real size. #}
+{% macro photo_frame(photo_id, boxes, alt) %}
+  <div class="frame">
+    <img src="{{ url_for('photo', photo_id=photo_id) }}" alt="{{ alt }}" loading="lazy">
+    {% for face in boxes %}
+      <span class="face-box" hidden data-face-id="{{ face.face_id }}"
+            data-x="{{ face.x }}" data-y="{{ face.y }}"
+            data-width="{{ face.width }}" data-height="{{ face.height }}"
+            title="Yüz · tespit skoru {{ '%.2f'|format(face.detection_score) }}"></span>
+    {% endfor %}
+  </div>
+{% endmacro %}

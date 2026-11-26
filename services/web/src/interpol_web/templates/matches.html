@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{# "with context": the macro needs url_for, which lives in the page context. #}
+{% from "_faces.html" import photo_frame with context %}
+
+{% block title %}Olası eşleşmeler · Interpol Red Notice Monitor{% endblock %}
+{% block nav_matches %}active{% endblock %}
+
+{# One side of a pair: the photo with the face, the name and a link to the notice. #}
+{% macro side(s) %}
+  <div class="match-side">
+    {{ photo_frame(s.photo_id, [s.box], s.entity_id) }}
+    <a href="{{ url_for('notice_page', notice_id=s.notice_id) }}" class="name">
+      {{ s.forename or "" }} {{ s.name }}</a>
+    <div class="muted small">{{ s.entity_id }}
+      {% if s.removed %}<span class="badge removed">kaldırıldı</span>{% endif %}</div>
+  </div>
+{% endmacro %}
+
+{% block sidebar %}
+  <h2>Olası eşleşmeler</h2>
+  {# ADR 0012: a similar face is only a lead for a person to check. #}
+  <p class="small">Farklı kayıtlardaki birbirine benzeyen yüzler. Bu bir kimlik tespiti
+    değildir: <strong>olası eşleşme, insan incelemesi gerekir.</strong></p>
+  <p class="muted small">Yüz modeli iki yüzü ancak benzerlik %{{ "%.0f"|format(match_threshold * 100) }}'ün
+    üstündeyse kaydeder. En benzer çift en üstte.</p>
+{% endblock %}
+
+{% block content %}
+  <div class="content-head">
+    <h1>Olası eşleşmeler</h1>
+    <p class="muted">
+      {% if result.total %}{{ "{:,}".format(result.total).replace(",", ".") }} çift{% else %}Henüz olası eşleşme yok.{% endif %}
+    </p>
+  </div>
+
+  <ul class="pairs">
+    {% for pair in result.pairs %}
+      <li class="pair">
+        {{ side(pair.first) }}
+        <div class="pair-score">
+          <div class="score">%{{ "%.0f"|format(pair.similarity * 100) }}</div>
+          <div class="muted small">benzerlik</div>
+        </div>
+        {{ side(pair.second) }}
+      </li>
+    {% endfor %}
+  </ul>
+
+  {% if page_count > 1 %}
+    <nav class="pages" aria-label="Sayfalar">
+      {% if page > 1 %}<a href="?page={{ page - 1 }}">‹ Önceki</a>{% endif %}
+      <span class="current">{{ page }} / {{ page_count }}</span>
+      {% if page < page_count %}<a href="?page={{ page + 1 }}">Sonraki ›</a>{% endif %}
+    </nav>
+  {% endif %}
+
+  <script src="{{ url_for('static', path='faces.js') }}" defer></script>
+{% endblock %}

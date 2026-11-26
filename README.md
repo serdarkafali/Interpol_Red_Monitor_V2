@@ -1,22 +1,23 @@
 # Interpol Red Notice Monitor
 
 Interpol'ün herkese açık Red Notice API'sindeki kayıtları düzenli olarak toplayan,
-PostgreSQL'de saklayan ve ileride fotoğraflar üzerinden yüz benzerliği araması yapacak
-servislerden oluşan bir sistem.
+PostgreSQL'de saklayan, fotoğraflardaki yüzleri karşılaştıran ve sonuçları bir web
+arayüzünde gösteren servislerden oluşan bir sistem.
 
 > **Durum:** Geliştirme aşamasında. Altyapı (Faz 0), veritabanı şeması (Faz 1),
-> collector (Faz 2), ingestor (Faz 3) ve fotoğrafları indiren face-worker (Faz 4) hazır;
-> sırada yüz benzerliği (Faz 5) var.
+> collector (Faz 2), ingestor (Faz 3), fotoğrafları indiren face-worker (Faz 4), yüz
+> benzerliği (Faz 5) ve web arayüzü (Faz 6) hazır.
 
 ## Mimari
 
 ```text
-Interpol API ──► collector ──► Kafka ──► ingestor ──► PostgreSQL ◄── api
-                                                          ▲
-                                                          │ indirilecek fotoğraflar
-Interpol API ──► face-worker ─────────────────────────────┘
-                     │
-                     └──► SeaweedFS (fotoğraflar, S3 API)
+Interpol API ──► collector ──► Kafka ──► ingestor ──► PostgreSQL ◄── web (salt okunur)
+                                                          ▲                │
+                                                          │ fotoğraflar,   │ fotoğraflar
+                                                          │ yüzler         │
+Interpol API ──► face-worker ─────────────────────────────┘                │
+                     │                                                     │
+                     └──► SeaweedFS (fotoğraflar, S3 API) ◄────────────────┘
 
 Tüm servisler ──► stdout (JSON log) ──► Filebeat ──► Logstash ──► Elasticsearch
 ```
@@ -49,7 +50,9 @@ libs/
 services/
   collector/       Interpol API'sinden kayıtları toplayan servis
   ingestor/        Kafka'daki olayları PostgreSQL'e yazan servis
-  face-worker/     Fotoğrafları indirip nesne deposuna (SeaweedFS) yazan servis
+  face-worker/     Fotoğrafları indirip nesne deposuna (SeaweedFS) yazan, yüzleri bulup
+                   karşılaştıran servis
+  web/             Kayıtları, fotoğrafları ve olası eşleşmeleri gösteren web arayüzü
 scripts/           Tek seferlik araçlar (API ölçümleri, uydurma olaylar, sahte Interpol)
 docs/adr/          Mimari karar kayıtları
 ```
@@ -73,7 +76,7 @@ uv sync --all-packages             # sanal ortam ve tüm bağımlılıklar
 uv run pre-commit install          # commit öncesi kontroller
 
 Copy-Item .env.example .env        # sonra .env içindeki şifreleri değiştirin
-docker compose up -d --build       # PostgreSQL, Kafka, SeaweedFS, migrate, ingestor
+docker compose up -d --build       # PostgreSQL, Kafka, SeaweedFS, migrate, ingestor, web
 ```
 
 `docker compose up` migration'ları ayrı bir `migrate` adımında uygular. Docker dışında
@@ -112,6 +115,12 @@ docker compose logs face-worker
 ```
 
 Ayrıntılar: [`services/face-worker/README.md`](services/face-worker/README.md).
+
+Web arayüzü `docker compose up` ile başlar ve yalnızca bu bilgisayardan açılır:
+<http://127.0.0.1:8000>. Kullanıcı adı ve şifre `.env`'deki `WEB_USERNAME` ve
+`WEB_PASSWORD`'dür. Veritabanına salt okunur `web` kullanıcısıyla bağlanır (ADR 0013).
+
+Ayrıntılar: [`services/web/README.md`](services/web/README.md).
 
 ## Kontroller
 
