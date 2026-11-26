@@ -1,0 +1,35 @@
+[project]
+name = "interpol-web"
+version = "0.1.0"
+description = "Kayıtları, fotoğrafları ve olası yüz eşleşmelerini gösteren web arayüzü"
+readme = "README.md"
+authors = [
+    { name = "Serdar", email = "serdarkfl8@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.165.0",
+    "interpol-observability",
+    "jinja2>=3.1.6",
+    "pydantic>=2.14.4",
+    "pydantic-settings>=2.16.3",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+interpol-web = "interpol_web:main"
+
+[build-system]
+requires = ["uv_build>=0.13.0,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.deptry]
+# The package's own module; deptry cannot detect it in the src layout.
+known_first_party = ["interpol_web"]
+
+[tool.uv.sources]
+interpol-observability = { workspace = true }
+
+[tool.deptry.per_rule_ignores]
+# Never imported by name: fastapi.templating loads it to render the HTML templates.
+DEP002 = ["jinja2"]

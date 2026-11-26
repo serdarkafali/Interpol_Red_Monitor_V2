@@ -12,6 +12,7 @@ members = ["libs/*", "services/*"]
 dev = [
     "curl-cffi>=0.16.3",
     "deptry>=0.25.1",
+    "httpx2>=2.16.2",
     "import-linter>=2.17",
     "mypy>=2.4.0",
     "numpy>=2.5.5",
@@ -48,18 +49,24 @@ root_packages = [
     "interpol_collector",
     "interpol_ingestor",
     "interpol_face_worker",
+    "interpol_web",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Services do not import each other"
 type = "independence"
-modules = ["interpol_collector", "interpol_ingestor", "interpol_face_worker"]
+modules = ["interpol_collector", "interpol_ingestor", "interpol_face_worker", "interpol_web"]
 
 [[tool.importlinter.contracts]]
 name = "Libraries do not import services"
 type = "forbidden"
 source_modules = ["interpol_contracts", "interpol_db", "interpol_observability"]
-forbidden_modules = ["interpol_collector", "interpol_ingestor", "interpol_face_worker"]
+forbidden_modules = [
+    "interpol_collector",
+    "interpol_ingestor",
+    "interpol_face_worker",
+    "interpol_web",
+]
 
 [[tool.importlinter.contracts]]
 name = "Libraries do not import each other"
@@ -101,6 +108,12 @@ layers = [
     "repository | photo_store | curl_transport",
     "interpol_photos | face_analysis",
 ]
+
+[[tool.importlinter.contracts]]
+name = "Web layers"
+type = "layers"
+containers = ["interpol_web"]
+layers = ["app", "auth"]
 
 [tool.pytest.ini_options]
 testpaths = ["libs", "services"]

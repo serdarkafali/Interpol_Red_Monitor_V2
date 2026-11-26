@@ -1,0 +1,66 @@
+/* Layout of the web interface: top bar, left filter sidebar, content (ADR 0013). */
+
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --border: #dde1e6;
+  --text: #1f2933;
+  --muted: #6b7280;
+  --accent: #1d4ed8;
+  --topbar: #13213c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0 24px;
+  height: 56px;
+  background: var(--topbar);
+}
+.topbar .brand { color: #fff; font-weight: 600; font-size: 17px; }
+.topbar nav { display: flex; gap: 20px; }
+.topbar nav a, .topbar .nav-soon { color: #c7d2e5; padding: 6px 0; }
+.topbar nav a.active { color: #fff; border-bottom: 2px solid #fff; }
+.topbar .nav-soon { opacity: 0.5; cursor: default; }
+
+/* Sidebar on the left, results on the right, like a classifieds site. */
+.layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  max-width: 1280px;
+  margin: 20px auto;
+  padding: 0 20px;
+}
+
+.sidebar, .content {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+.sidebar { align-self: start; position: sticky; top: 20px; }
+.sidebar h2 { font-size: 16px; margin: 0 0 12px; }
+.content h1 { font-size: 20px; margin: 0 0 12px; }
+
+.muted { color: var(--muted); }
+
+/* Narrow screens: the sidebar goes above the results. */
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; }
+}
