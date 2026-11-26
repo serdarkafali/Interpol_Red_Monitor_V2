@@ -9,10 +9,12 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.165.0",
+    "interpol-db",
     "interpol-observability",
     "jinja2>=3.1.6",
     "pydantic>=2.14.4",
     "pydantic-settings>=2.16.3",
+    "sqlalchemy>=2.1.9",
     "uvicorn>=0.54.0",
 ]
 
@@ -29,6 +31,7 @@ known_first_party = ["interpol_web"]
 
 [tool.uv.sources]
 interpol-observability = { workspace = true }
+interpol-db = { workspace = true }
 
 [tool.deptry.per_rule_ignores]
 # Never imported by name: fastapi.templating loads it to render the HTML templates.

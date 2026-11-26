@@ -8,11 +8,14 @@
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="{{ url_for('index') }}">Interpol Red Notice Monitor</a>
-    <nav>
-      <a href="{{ url_for('index') }}" class="{% block nav_notices %}{% endblock %}">Kayıtlar</a>
-      <span class="nav-soon" title="Faz 6, 7. adım">Olası eşleşmeler</span>
-    </nav>
+    {# Same width as the page below, so the brand lines up with the sidebar. #}
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('index') }}">Interpol Red Notice Monitor</a>
+      <nav>
+        <a href="{{ url_for('index') }}" class="{% block nav_notices %}{% endblock %}">Kayıtlar</a>
+        <span class="nav-soon" title="Faz 6, 7. adım">Olası eşleşmeler</span>
+      </nav>
+    </div>
   </header>
 
   <div class="layout">
