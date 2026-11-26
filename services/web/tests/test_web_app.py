@@ -7,7 +7,7 @@ from pydantic import SecretStr
 from interpol_web.app import create_app
 from interpol_web.config import WebSettings
 from interpol_web.filters import NoticeFilters
-from interpol_web.queries import NoticeDetail, SearchResult
+from interpol_web.queries import MatchPage, NoticeDetail, SearchResult
 
 USER = "admin"
 PASSWORD = "made-up-password"
@@ -24,6 +24,9 @@ class EmptyReader:
 
     def photo_key(self, photo_id: int) -> str | None:
         return None
+
+    def matches(self, page: int) -> MatchPage:
+        return MatchPage(pairs=(), total=0)
 
 
 class NoPhotos:

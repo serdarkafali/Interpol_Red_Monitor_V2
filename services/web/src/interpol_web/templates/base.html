@@ -13,7 +13,7 @@
       <a class="brand" href="{{ url_for('index') }}">Interpol Red Notice Monitor</a>
       <nav>
         <a href="{{ url_for('index') }}" class="{% block nav_notices %}{% endblock %}">Kayıtlar</a>
-        <span class="nav-soon" title="Faz 6, 7. adım">Olası eşleşmeler</span>
+        <a href="{{ url_for('matches_page') }}" class="{% block nav_matches %}{% endblock %}">Olası eşleşmeler</a>
       </nav>
     </div>
   </header>

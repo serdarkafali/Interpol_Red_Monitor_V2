@@ -1,11 +1,12 @@
-"""Read-only queries of the notice list and detail pages (ADR 0013).
+"""Read-only queries of the notice list, detail and possible match pages (ADR 0013).
 
 One search runs three kinds of query on the same snapshot of the database: the notices
 of the current page, the total number of matching notices and the counts shown next to
 every option of the sidebar (facets). A facet ignores its own filter, so the other
 options of the same group keep their counts and stay clickable, like on sahibinden.com.
 The detail page reads one notice with its countries, warrants, photo faces and possible
-face matches. The web service connects with the read-only database user; nothing here
+face matches. The match page lists the pairs of faces of different notices. The web
+service connects with the read-only database user; nothing here
 writes.
 """
 
@@ -14,17 +15,20 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     ColumnElement,
     Connection,
+    Label,
+    RowMapping,
     Select,
     case,
     func,
     or_,
     select,
 )
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import InstrumentedAttribute, aliased
 
 from interpol_db import ArrestWarrant, Country, Face, FaceMatch, Notice, NoticePhoto
 from interpol_db import notice_nationalities as nationalities
@@ -39,6 +43,9 @@ NATIONALITY = "nationality"
 ISSUER = "issuer"
 # The sex codes of Interpol, in the order the sidebar lists them.
 SEX_CODES = ("M", "F", "U")
+# The similarity threshold of ADR 0012. Two faces of one notice below it may not show
+# the same person; the face worker saves faces of other notices only above it.
+MATCH_SIMILARITY_THRESHOLD = 0.443
 
 
 @dataclass(frozen=True)
@@ -132,6 +139,50 @@ class PossibleMatch:
 
 
 @dataclass(frozen=True)
+class OwnComparison:
+    """Two faces on photos of the same notice and how alike they are."""
+
+    first_photo_id: int
+    second_photo_id: int
+    similarity: float
+
+    @property
+    def may_differ(self) -> bool:
+        """True if the two photos may not show the same person (ADR 0013)."""
+        return self.similarity < MATCH_SIMILARITY_THRESHOLD
+
+
+@dataclass(frozen=True)
+class MatchSide:
+    """One face of a possible match: the notice, the photo and the face box."""
+
+    notice_id: int
+    entity_id: str
+    name: str
+    forename: str | None
+    removed: bool
+    photo_id: int
+    box: FaceBox
+
+
+@dataclass(frozen=True)
+class MatchPair:
+    """Two faces of different notices that look alike; a lead, never an identification."""
+
+    first: MatchSide
+    second: MatchSide
+    similarity: float
+
+
+@dataclass(frozen=True)
+class MatchPage:
+    """One page of the possible match list."""
+
+    pairs: tuple[MatchPair, ...]
+    total: int
+
+
+@dataclass(frozen=True)
 class NoticeDetail:
     """Everything the detail page shows about one notice."""
 
@@ -157,6 +208,7 @@ class NoticeDetail:
     warrants: tuple[Warrant, ...]
     photos: tuple[PhotoFaces, ...]
     matches: tuple[PossibleMatch, ...]
+    own_comparisons: tuple[OwnComparison, ...]
 
 
 class NoticeQueries:
@@ -192,6 +244,12 @@ class NoticeQueries:
                 )
             ).scalar_one_or_none()
             return key
+
+    def matches(self, page: int) -> MatchPage:
+        """One page of the possible matches between different notices, most alike first."""
+        with self._connect() as connection:
+            connection.execution_options(isolation_level="REPEATABLE READ")
+            return MatchPage(pairs=_match_pairs(connection, page), total=_match_total(connection))
 
     def notice(self, notice_id: int) -> NoticeDetail | None:
         """Return one notice with everything around it, or None if there is no such id."""
@@ -494,6 +552,7 @@ def _notice_detail(connection: Connection, notice_id: int, today: date) -> Notic
         warrants=_warrants(connection, notice_id),
         photos=_photo_faces(connection, notice_id),
         matches=_possible_matches(connection, notice_id),
+        own_comparisons=_own_comparisons(connection, notice_id),
     )
 
 
@@ -598,4 +657,110 @@ def _possible_matches(connection: Connection, notice_id: int) -> tuple[PossibleM
             similarity=1 - row.distance,
         )
         for row in rows
+    )
+
+
+def _own_comparisons(connection: Connection, notice_id: int) -> tuple[OwnComparison, ...]:
+    """The face worker compares every face of a notice with its other faces; least alike
+    first, so a photo that may show someone else is at the top."""
+    first_face = aliased(Face)
+    second_face = aliased(Face)
+    rows = connection.execute(
+        select(first_face.photo_id, second_face.photo_id, FaceMatch.distance)
+        .select_from(FaceMatch)
+        .join(first_face, first_face.id == FaceMatch.first_face_id)
+        .join(second_face, second_face.id == FaceMatch.second_face_id)
+        .join(NoticePhoto, NoticePhoto.id == first_face.photo_id)
+        .where(NoticePhoto.notice_id == notice_id, FaceMatch.same_notice.is_(True))
+        .order_by(FaceMatch.distance.desc(), FaceMatch.id)
+    ).all()
+    return tuple(
+        OwnComparison(first_photo_id=first, second_photo_id=second, similarity=1 - distance)
+        for first, second, distance in rows
+    )
+
+
+def _match_total(connection: Connection) -> int:
+    query = select(func.count()).select_from(FaceMatch).where(FaceMatch.same_notice.is_(False))
+    return connection.execute(query).scalar_one()
+
+
+def _match_pairs(connection: Connection, page: int) -> tuple[MatchPair, ...]:
+    """The pairs of one page; each side brings its notice, photo and face box."""
+    # The same three tables are joined twice, once per side of the pair, so each side
+    # gets its own aliases.
+    first_face, second_face = aliased(Face), aliased(Face)
+    first_photo, second_photo = aliased(NoticePhoto), aliased(NoticePhoto)
+    first_notice, second_notice = aliased(Notice), aliased(Notice)
+    rows = connection.execute(
+        select(
+            FaceMatch.distance,
+            *_side_columns("first", first_notice, first_photo, first_face),
+            *_side_columns("second", second_notice, second_photo, second_face),
+        )
+        .select_from(FaceMatch)
+        .join(first_face, first_face.id == FaceMatch.first_face_id)
+        .join(first_photo, first_photo.id == first_face.photo_id)
+        .join(first_notice, first_notice.id == first_photo.notice_id)
+        .join(second_face, second_face.id == FaceMatch.second_face_id)
+        .join(second_photo, second_photo.id == second_face.photo_id)
+        .join(second_notice, second_notice.id == second_photo.notice_id)
+        .where(FaceMatch.same_notice.is_(False))
+        # The id breaks ties, so a pair never shows up on two pages.
+        .order_by(FaceMatch.distance, FaceMatch.id)
+        .limit(PAGE_SIZE)
+        .offset((page - 1) * PAGE_SIZE)
+    ).all()
+    return tuple(
+        MatchPair(
+            first=_match_side(row._mapping, "first"),
+            second=_match_side(row._mapping, "second"),
+            similarity=1 - row.distance,
+        )
+        for row in rows
+    )
+
+
+def _side_columns(
+    side: str, notice: type[Notice], photo: type[NoticePhoto], face: type[Face]
+) -> list[Label[Any]]:
+    """The columns of one side, named "first_..." or "second_..."."""
+    columns: dict[str, InstrumentedAttribute[Any]] = {
+        "notice_id": notice.id,
+        "entity_id": notice.entity_id,
+        "name": notice.name,
+        "forename": notice.forename,
+        "deleted_at": notice.deleted_at,
+        "photo_id": photo.id,
+        "face_id": face.id,
+        "box_x": face.box_x,
+        "box_y": face.box_y,
+        "box_width": face.box_width,
+        "box_height": face.box_height,
+        "detection_score": face.detection_score,
+    }
+    return [column.label(f"{side}_{name}") for name, column in columns.items()]
+
+
+def _match_side(row: RowMapping, side: str) -> MatchSide:
+    """Read the "first_..." or "second_..." columns of a row back into one side."""
+
+    def value(name: str) -> Any:
+        return row[f"{side}_{name}"]
+
+    return MatchSide(
+        notice_id=value("notice_id"),
+        entity_id=value("entity_id"),
+        name=value("name"),
+        forename=value("forename"),
+        removed=value("deleted_at") is not None,
+        photo_id=value("photo_id"),
+        box=FaceBox(
+            value("face_id"),
+            value("box_x"),
+            value("box_y"),
+            value("box_width"),
+            value("box_height"),
+            value("detection_score"),
+        ),
     )

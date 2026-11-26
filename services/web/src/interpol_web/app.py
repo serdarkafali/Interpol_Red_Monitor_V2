@@ -9,10 +9,13 @@ from fastapi.templating import Jinja2Templates
 
 from interpol_web.auth import require_login
 from interpol_web.config import WebSettings
+from interpol_web.queries import MATCH_SIMILARITY_THRESHOLD
 from interpol_web.routes import NoticeReader, PhotoSource, create_router
 
 PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
+# Shown on the pages that explain what a possible match is.
+templates.env.globals["match_threshold"] = MATCH_SIMILARITY_THRESHOLD
 
 
 def create_app(settings: WebSettings, reader: NoticeReader, photos: PhotoSource) -> FastAPI:

@@ -487,3 +487,58 @@ def test_only_a_downloaded_photo_has_a_key(engine: Engine, queries: NoticeQuerie
     assert queries.photo_key(downloaded) == "notices/2026/1/pic"
     assert queries.photo_key(waiting) is None
     assert queries.photo_key(999999) is None
+
+
+def test_own_comparisons_come_least_alike_first(engine: Engine, queries: NoticeQueries) -> None:
+    notice_id = add_notice(engine, "2026/1")
+    a = add_face(engine, notice_id, "a")
+    b = add_face(engine, notice_id, "b")
+    c = add_face(engine, notice_id, "c")
+    other = add_face(engine, add_notice(engine, "2026/2"), "other")
+    add_match(engine, a, b, same_notice=True, distance=0.1)
+    add_match(engine, a, c, same_notice=True, distance=0.8)
+    add_match(engine, a, other, same_notice=False, distance=0.2)
+
+    detail = queries.notice(notice_id)
+
+    assert detail is not None
+    assert [round(pair.similarity, 2) for pair in detail.own_comparisons] == [0.2, 0.9]
+    assert [pair.may_differ for pair in detail.own_comparisons] == [True, False]
+
+
+def test_the_match_page_lists_pairs_of_different_notices_most_alike_first(
+    engine: Engine, queries: NoticeQueries
+) -> None:
+    doe = add_notice(engine, "2026/1", name="DOE")
+    roe = add_notice(engine, "2026/2", name="ROE", removed=True)
+    poe = add_notice(engine, "2026/3", name="POE")
+    doe_face = add_face(engine, doe, "doe", x=7)
+    roe_face = add_face(engine, roe, "roe")
+    poe_face = add_face(engine, poe, "poe")
+    second_doe_face = add_face(engine, doe, "doe-2")
+    add_match(engine, doe_face, poe_face, same_notice=False, distance=0.5)
+    add_match(engine, doe_face, roe_face, same_notice=False, distance=0.3)
+    add_match(engine, doe_face, second_doe_face, same_notice=True, distance=0.1)
+
+    page = queries.matches(1)
+
+    assert page.total == 2
+    assert [(p.first.name, p.second.name) for p in page.pairs] == [("DOE", "ROE"), ("DOE", "POE")]
+    first = page.pairs[0]
+    assert first.similarity == pytest.approx(0.7)
+    assert (first.first.notice_id, first.first.box.face_id, first.first.box.x) == (doe, doe_face, 7)
+    assert first.second.removed is True
+    assert first.first.photo_id != first.second.photo_id
+
+
+def test_the_second_match_page_continues(engine: Engine, queries: NoticeQueries) -> None:
+    anchor = add_face(engine, add_notice(engine, "2026/0"), "anchor")
+    for number in range(PAGE_SIZE + 2):
+        face = add_face(engine, add_notice(engine, f"2026/{number + 1}"), f"f{number}")
+        add_match(engine, anchor, face, same_notice=False, distance=0.01 * (number + 1))
+
+    first, second = queries.matches(1), queries.matches(2)
+
+    assert len(first.pairs) == PAGE_SIZE
+    assert len(second.pairs) == 2
+    assert first.total == second.total == PAGE_SIZE + 2
