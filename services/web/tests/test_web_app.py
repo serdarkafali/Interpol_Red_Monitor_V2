@@ -6,9 +6,18 @@ from pydantic import SecretStr
 
 from interpol_web.app import create_app
 from interpol_web.config import WebSettings
+from interpol_web.filters import NoticeFilters
+from interpol_web.queries import SearchResult
 
 USER = "admin"
 PASSWORD = "made-up-password"
+
+
+class EmptySearch:
+    """A search that finds nothing; these tests are about the shell, not the data."""
+
+    def search(self, filters: NoticeFilters) -> SearchResult:
+        return SearchResult(cards=(), total=0, sexes=(), nationalities=(), issuers=())
 
 
 @pytest.fixture
@@ -18,7 +27,7 @@ def client() -> TestClient:
         username=USER,
         password=SecretStr(PASSWORD),
     )
-    return TestClient(create_app(settings))
+    return TestClient(create_app(settings, EmptySearch()))
 
 
 def test_a_page_without_credentials_asks_the_browser_to_log_in(client: TestClient) -> None:

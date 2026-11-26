@@ -4,19 +4,23 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request, Response
-from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from interpol_web.auth import require_login
 from interpol_web.config import WebSettings
+from interpol_web.routes import NoticeSearch, create_router
 
 PACKAGE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
 
 
-def create_app(settings: WebSettings) -> FastAPI:
-    """Build the application; every page asks for the configured user name and password."""
+def create_app(settings: WebSettings, search: NoticeSearch) -> FastAPI:
+    """Build the application; every page asks for the configured user name and password.
+
+    ``search`` answers the notice searches; main() hands in the database queries, the
+    tests a made-up one.
+    """
     app = FastAPI(
         # No automatic API documentation: this is a set of pages, not an API, and the
         # documentation would only show the inside of the application to visitors.
@@ -38,9 +42,5 @@ def create_app(settings: WebSettings) -> FastAPI:
         response.headers["Cache-Control"] = "no-store"
         return response
 
-    @app.get("/", response_class=HTMLResponse)
-    def index(request: Request) -> HTMLResponse:
-        """The list of notices; filled in the next step."""
-        return templates.TemplateResponse(request, "index.html", {})
-
+    app.include_router(create_router(search, templates))
     return app

@@ -1,14 +1,151 @@
 {% extends "base.html" %}
 
+{# Interpol's sex codes in words; the queries return only the codes. #}
+{% set sex_labels = {"M": "Erkek", "F": "Kadın", "U": "Bilinmiyor"} %}
+
 {% block nav_notices %}active{% endblock %}
 
+{# One sidebar group of tick boxes with the count of every option. #}
+{% macro facet(title, name, options, selected) %}
+  <fieldset class="group">
+    <legend>{{ title }}</legend>
+    {% if options %}
+      <div class="options">
+        {% for option in options %}
+          <label class="option">
+            <input type="checkbox" name="{{ name }}" value="{{ option.value }}"
+                   {% if option.value in selected %}checked{% endif %}>
+            <span class="option-label">{{ sex_labels.get(option.label, option.label) if name == "sex" else option.label }}</span>
+            <span class="count">{{ option.count }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted small">Seçenek yok</p>
+    {% endif %}
+  </fieldset>
+{% endmacro %}
+
 {% block sidebar %}
-  <h2>Filtrele</h2>
-  <p class="muted">Filtreler bir sonraki adımda gelecek: isim, cinsiyet, uyruk, kararı
-    veren ülke, yaş, fotoğraf, olası eşleşme, durum.</p>
+  {# GET: the filters end up in the URL, so a search can be bookmarked and shared. No
+     page number is sent, so a new search starts on page 1. #}
+  <form method="get" action="{{ url_for('index') }}" class="filters">
+    <div class="sidebar-head">
+      <h2>Filtrele</h2>
+      <a href="{{ url_for('index') }}" class="small">Temizle</a>
+    </div>
+
+    <fieldset class="group">
+      <legend>İsim veya kayıt no</legend>
+      <input type="search" name="q" value="{{ filters.q or '' }}" maxlength="100"
+             placeholder="ör. 2026/12345">
+    </fieldset>
+
+    {{ facet("Cinsiyet", "sex", result.sexes, filters.sex) }}
+
+    <fieldset class="group">
+      <legend>Yaş</legend>
+      <div class="range">
+        <input type="number" name="age_min" min="0" max="120" placeholder="En az"
+               value="{{ filters.age_min if filters.age_min is not none else '' }}">
+        <span>–</span>
+        <input type="number" name="age_max" min="0" max="120" placeholder="En çok"
+               value="{{ filters.age_max if filters.age_max is not none else '' }}">
+      </div>
+    </fieldset>
+
+    {{ facet("Uyruk", "nationality", result.nationalities, filters.nationality) }}
+    {{ facet("Kararı veren ülke", "issuer", result.issuers, filters.issuer) }}
+
+    <fieldset class="group">
+      <legend>Diğer</legend>
+      <label class="option">
+        <input type="checkbox" name="has_photo" value="true" {% if filters.has_photo %}checked{% endif %}>
+        <span class="option-label">Fotoğrafı olanlar</span>
+      </label>
+      <label class="option">
+        <input type="checkbox" name="has_match" value="true" {% if filters.has_match %}checked{% endif %}>
+        <span class="option-label">Olası yüz eşleşmesi olanlar</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Durum</legend>
+      <label class="option">
+        <input type="radio" name="status" value="active" {% if filters.status == "active" %}checked{% endif %}>
+        <span class="option-label">Yayında</span>
+      </label>
+      <label class="option">
+        <input type="radio" name="status" value="removed" {% if filters.status == "removed" %}checked{% endif %}>
+        <span class="option-label">Kaldırılmış</span>
+      </label>
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>Sıralama</legend>
+      <select name="sort">
+        <option value="newest" {% if filters.sort == "newest" %}selected{% endif %}>En yeni</option>
+        <option value="name" {% if filters.sort == "name" %}selected{% endif %}>İsme göre</option>
+      </select>
+    </fieldset>
+
+    <button type="submit">Ara</button>
+  </form>
 {% endblock %}
 
 {% block content %}
-  <h1>Kayıtlar</h1>
-  <p class="muted">Kayıt listesi bir sonraki adımda burada olacak.</p>
+  <div class="content-head">
+    <h1>Kayıtlar</h1>
+    <p class="muted">
+      {% if result.cards %}
+        {{ "{:,}".format(result.total).replace(",", ".") }} kayıt bulundu ·
+        {{ filters.offset + 1 }}–{{ filters.offset + result.cards | length }} arası
+      {% elif result.total %}
+        {{ "{:,}".format(result.total).replace(",", ".") }} kayıt bulundu, bu sayfa boş.
+        <a href="{{ page_url(1) }}">İlk sayfaya dön</a>
+      {% else %}
+        Bu filtrelere uyan kayıt yok.
+      {% endif %}
+    </p>
+  </div>
+
+  <ul class="cards">
+    {% for card in result.cards %}
+      <li class="card">
+        {# The photo itself comes in step 6; until then only whether there is one. #}
+        <div class="photo {% if not card.photo_id %}no-photo{% endif %}">
+          {{ "Fotoğraf var" if card.photo_id else "Fotoğraf yok" }}
+        </div>
+        <div class="card-body">
+          <div class="name">{{ card.forename or "" }} {{ card.name }}</div>
+          <div class="muted small">{{ card.entity_id }}</div>
+          <div class="facts">
+            {% if card.age is not none %}<span>{{ card.age }} yaş</span>{% endif %}
+            {% if card.sex %}<span>{{ sex_labels.get(card.sex, card.sex) }}</span>{% endif %}
+            {% for code in card.nationalities %}<span class="tag">{{ code }}</span>{% endfor %}
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+
+  {% if page_count > 1 %}
+    {# Previous, next and the pages around the current one, plus the first and last. #}
+    {% set current = filters.page %}
+    <nav class="pages" aria-label="Sayfalar">
+      {% if current > 1 %}<a href="{{ page_url(current - 1) }}">‹ Önceki</a>{% endif %}
+      {% for number in range(1, page_count + 1) %}
+        {% if number == 1 or number == page_count or (number >= current - 2 and number <= current + 2) %}
+          {% if number == current %}
+            <span class="current">{{ number }}</span>
+          {% else %}
+            <a href="{{ page_url(number) }}">{{ number }}</a>
+          {% endif %}
+        {% elif number == current - 3 or number == current + 3 %}
+          <span class="gap">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if current < page_count %}<a href="{{ page_url(current + 1) }}">Sonraki ›</a>{% endif %}
+    </nav>
+  {% endif %}
 {% endblock %}
